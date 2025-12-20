@@ -1,0 +1,42 @@
+{
+    "name": "mr-rijal/laravel-sms",
+    "description": "Unified, extensible SMS gateway for Laravel",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Prashant Rijal",
+            "email": "contact@mrrijal.com"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "illuminate/support": "^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.8",
+        "phpunit/phpunit": "^12.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "MrRijal\\LaravelSms\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MrRijal\\LaravelSms\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MrRijal\\LaravelSms\\SmsServiceProvider"
+            ],
+            "aliases": {
+                "Sms": "MrRijal\\LaravelSms\\Facades\\Sms"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

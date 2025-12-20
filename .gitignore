@@ -1,0 +1,10 @@
+*.log
+.DS_Store
+.phpunit.result.cache
+/.fleet
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+/vendor
