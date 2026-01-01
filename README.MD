@@ -87,7 +87,7 @@ return [
 use MrRijal\LaravelSms\Facades\Sms;
 
 Sms::to('9812345678')
-    ->message('Hello from Laravel')
+    ->message('Hello from Laravel SMS')
     ->send();
 ```
 
