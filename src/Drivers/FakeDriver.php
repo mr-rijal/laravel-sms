@@ -17,11 +17,12 @@ class FakeDriver implements SmsProvider
     public function send(SmsMessage $message): bool
     {
         self::$messages[] = [
-            'to' => $message->to,
-            'message' => $message->text,
-            'template' => $message->templateId ?? null,
-            'vars' => $message->variables ?? null,
+            'to' => $message->getTo(),
+            'message' => $message->getText(),
+            'template' => $message->getTemplateId(),
+            'vars' => $message->getVariables(),
         ];
+
         return true;
     }
 

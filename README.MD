@@ -293,6 +293,30 @@ Sms::provider('fake')
     ->sendNow();
 ```
 
+Run the test suite:
+
+```bash
+vendor/bin/phpunit
+```
+
+---
+
+## Development
+
+### Code Formatting
+
+This package uses [Laravel Pint](https://laravel.com/docs/pint) for code formatting.
+
+Format code:
+```bash
+composer format
+```
+
+Check formatting (without making changes):
+```bash
+composer format:test
+```
+
 ---
 
 ## Contributing

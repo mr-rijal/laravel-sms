@@ -8,6 +8,8 @@ class SmsSent
 {
     public function __construct(
         public SmsMessage $message,
-        public string $provider
+        public string $provider,
+        public bool $success = true,
+        public ?string $error = null
     ) {}
 }
