@@ -8,3 +8,7 @@
 /.vscode
 /.zed
 /vendor
+/composer.lock
+*.zip
+/release
+/.pint.cache

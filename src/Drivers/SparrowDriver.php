@@ -3,26 +3,48 @@
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
 
 class SparrowDriver implements SmsProvider
 {
-    public function __construct(protected array $config) {}
+    public function __construct(protected array $config)
+    {
+        if (empty($config['token']) || empty($config['from'])) {
+            throw new \InvalidArgumentException('Sparrow configuration is incomplete');
+        }
+    }
 
     public function send(SmsMessage $message): bool
     {
-        $client = new Client();
+        if (empty($message->getText()) && empty($message->getTemplateId())) {
+            throw new \InvalidArgumentException('Message text or template ID is required');
+        }
 
-        foreach ($message->to as $to) {
-            $client->post('https://api.sparrowsms.com/v2/sms/', [
-                'form_params' => [
-                    'token' => $this->config['token'],
-                    'from'  => $this->config['from'],
-                    'to'    => $to,
-                    'text'  => $message->text ?? '',
-                ],
-            ]);
+        $client = new Client(['timeout' => 30]);
+
+        foreach ($message->getTo() as $to) {
+            try {
+                $response = $client->post('https://api.sparrowsms.com/v2/sms/', [
+                    'form_params' => [
+                        'token' => $this->config['token'],
+                        'from' => $this->config['from'],
+                        'to' => $to,
+                        'text' => $message->getText() ?? '',
+                    ],
+                ]);
+
+                if ($response->getStatusCode() !== 200) {
+                    throw new \RuntimeException('Failed to send SMS via Sparrow: '.$response->getBody()->getContents());
+                }
+            } catch (GuzzleException $e) {
+                throw new \RuntimeException(
+                    "Failed to send SMS via Sparrow: {$e->getMessage()}",
+                    0,
+                    $e
+                );
+            }
         }
 
         return true;

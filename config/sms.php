@@ -3,7 +3,6 @@
 use MrRijal\LaravelSms\Drivers;
 
 return [
-
     'default' => env('SMS_PROVIDER', 'fake'),
 
     'queue' => false,
@@ -14,11 +13,11 @@ return [
     |--------------------------------------------------------------------------
     */
     'drivers' => [
-        'twilio'  => Drivers\TwilioDriver::class,
+        'twilio' => Drivers\TwilioDriver::class,
         'sparrow' => Drivers\SparrowDriver::class,
-        'msg91'   => Drivers\Msg91Driver::class,
-        'vonage'  => Drivers\VonageDriver::class,
-        'fake'    => Drivers\FakeDriver::class
+        'msg91' => Drivers\Msg91Driver::class,
+        'vonage' => Drivers\VonageDriver::class,
+        'fake' => Drivers\FakeDriver::class,
     ],
 
     /*
@@ -27,30 +26,29 @@ return [
     |--------------------------------------------------------------------------
     */
     'providers' => [
-
         'twilio' => [
-            'sid'   => env('TWILIO_SID'),
+            'sid' => env('TWILIO_SID'),
             'token' => env('TWILIO_TOKEN'),
-            'from'  => env('TWILIO_FROM'),
+            'from' => env('TWILIO_FROM'),
         ],
 
         'sparrow' => [
             'token' => env('SPARROW_TOKEN'),
-            'from'  => env('SPARROW_FROM'),
+            'from' => env('SPARROW_FROM'),
         ],
 
         'msg91' => [
             'authkey' => env('MSG91_AUTHKEY'),
-            'sender'  => env('MSG91_SENDER'),
+            'sender' => env('MSG91_SENDER'),
         ],
 
         'vonage' => [
-            'key'    => env('VONAGE_KEY'),
+            'key' => env('VONAGE_KEY'),
             'secret' => env('VONAGE_SECRET'),
-            'from'   => env('VONAGE_FROM'),
+            'from' => env('VONAGE_FROM'),
         ],
 
-        'fake' => []
+        'fake' => [],
     ],
 
     'random_drivers' => ['twilio', 'msg91'],
