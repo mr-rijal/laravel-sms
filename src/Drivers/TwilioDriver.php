@@ -4,6 +4,7 @@ namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
 
@@ -54,7 +55,10 @@ class TwilioDriver implements SmsProvider
                     );
                 }
             } catch (GuzzleException $e) {
-                $statusCode = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 0;
+                $statusCode = 0;
+                if ($e instanceof RequestException && $e->hasResponse()) {
+                    $statusCode = $e->getResponse()->getStatusCode();
+                }
                 throw new \RuntimeException(
                     "Failed to send SMS via Twilio: {$e->getMessage()}",
                     $statusCode,
