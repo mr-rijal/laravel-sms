@@ -17,6 +17,7 @@ return [
         'sparrow' => Drivers\SparrowDriver::class,
         'msg91' => Drivers\Msg91Driver::class,
         'vonage' => Drivers\VonageDriver::class,
+        'whatsapp' => Drivers\WhatsAppDriver::class,
         'aws_sns' => Drivers\AwsSnsDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
@@ -71,4 +72,48 @@ return [
     ],
 
     'random_drivers' => ['twilio', 'msg91'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure webhooks to receive status updates and incoming messages
+    | from SMS/WhatsApp providers.
+    |
+    */
+    'webhooks' => [
+        'enabled' => env('SMS_WEBHOOKS_ENABLED', false),
+        'middleware' => ['web'],
+
+        /*
+        |--------------------------------------------------------------------------
+        | Provider Webhook Secrets
+        |--------------------------------------------------------------------------
+        |
+        | Configure webhook secrets for each provider to verify incoming
+        | webhook requests. Leave empty to disable verification.
+        |
+        */
+        'twilio' => [
+            'secret' => env('TWILIO_WEBHOOK_SECRET'),
+        ],
+
+        'whatsapp' => [
+            'secret' => env('WHATSAPP_WEBHOOK_SECRET'),
+            'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),
+        ],
+
+        'vonage' => [
+            'secret' => env('VONAGE_WEBHOOK_SECRET'),
+        ],
+
+        'msg91' => [
+            'secret' => env('MSG91_WEBHOOK_SECRET'),
+        ],
+
+        'sparrow' => [
+            'secret' => env('SPARROW_WEBHOOK_SECRET'),
+        ],
+    ],
 ];

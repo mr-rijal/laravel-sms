@@ -25,5 +25,18 @@ class SmsServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/sms.php' => config_path('sms.php'),
         ], 'sms-config');
+
+        // Register webhook routes if enabled
+        if (config('sms.webhooks.enabled', false)) {
+            $this->loadWebhookRoutes();
+        }
+    }
+
+    /**
+     * Load webhook routes
+     */
+    protected function loadWebhookRoutes(): void
+    {
+        $this->loadRoutesFrom(__DIR__.'/../routes/webhook.php');
     }
 }
