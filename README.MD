@@ -46,6 +46,7 @@ return [
         'sparrow' => \MrRijal\LaravelSms\Drivers\SparrowDriver::class,
         'msg91'   => \MrRijal\LaravelSms\Drivers\Msg91Driver::class,
         'vonage'  => \MrRijal\LaravelSms\Drivers\VonageDriver::class,
+        'aws_sns' => \MrRijal\LaravelSms\Drivers\AwsSnsDriver::class,
         'fake'    => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
     ],
 
@@ -70,6 +71,14 @@ return [
             'key'    => env('VONAGE_KEY'),
             'secret' => env('VONAGE_SECRET'),
             'from'   => env('VONAGE_FROM'),
+        ],
+
+        'aws_sns' => [
+            'key'      => env('AWS_ACCESS_KEY_ID'),
+            'secret'   => env('AWS_SECRET_ACCESS_KEY'),
+            'region'   => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'sender_id' => env('AWS_SNS_SENDER_ID', ''),
+            'sms_type' => env('AWS_SNS_SMS_TYPE', 'Transactional'), // Transactional or Promotional
         ],
 
         'fake' => [], // For testing
