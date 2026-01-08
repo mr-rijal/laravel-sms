@@ -18,6 +18,7 @@ return [
         'msg91' => Drivers\Msg91Driver::class,
         'vonage' => Drivers\VonageDriver::class,
         'whatsapp' => Drivers\WhatsAppDriver::class,
+        'aws_sns' => Drivers\AwsSnsDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
 
@@ -57,6 +58,14 @@ return [
             'template_language' => env('WHATSAPP_TEMPLATE_LANGUAGE', 'en'),
             'preview_url' => env('WHATSAPP_PREVIEW_URL', false),
             'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', ''),
+        ],
+
+        'aws_sns' => [
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'sender_id' => env('AWS_SNS_SENDER_ID', ''),
+            'sms_type' => env('AWS_SNS_SMS_TYPE', 'Transactional'), // Transactional or Promotional
         ],
 
         'fake' => [],
