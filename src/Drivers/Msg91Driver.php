@@ -11,6 +11,13 @@ class Msg91Driver implements SmsProvider
 {
     protected ?Client $client = null;
 
+    /**
+     * Construct the MSG91 driver and validate required configuration.
+     *
+     * @param array $config Configuration array that must contain the keys 'authkey' (API key) and 'sender' (sender ID).
+     * @param Client|null $client Optional Guzzle HTTP client to use for requests; when omitted a client will be created at send time.
+     * @throws \InvalidArgumentException If 'authkey' or 'sender' is missing or empty in the provided configuration.
+     */
     public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['authkey']) || empty($config['sender'])) {
@@ -19,6 +26,12 @@ class Msg91Driver implements SmsProvider
         $this->client = $client;
     }
 
+    /**
+     * Send an SMS message via MSG91 using either the template flow API or the plain-text API.
+     *
+     * @param SmsMessage $message The message to send; may include recipients, text, template ID, and template variables.
+     * @return bool `true` on successful delivery request.
+     * @throws \RuntimeException If the provider returns a non-200 response or the HTTP client fails.
     public function send(SmsMessage $message): bool
     {
         $client = $this->client ?? new Client(['timeout' => 30]);

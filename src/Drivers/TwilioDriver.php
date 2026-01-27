@@ -12,6 +12,17 @@ class TwilioDriver implements SmsProvider
 {
     protected Client $client;
 
+    /**
+     * Create a TwilioDriver instance using the provided configuration and optional HTTP client.
+     *
+     * The configuration must include Twilio credentials and a sender number. If `$client` is null,
+     * a default Guzzle client configured for the Twilio API will be created using the provided
+     * credentials.
+     *
+     * @param array $config Required keys: 'sid' (Twilio Account SID), 'token' (Auth token), and 'from' (sender phone number).
+     * @param \GuzzleHttp\Client|null $client Optional pre-configured HTTP client to use for requests.
+     * @throws \InvalidArgumentException If any of the required configuration keys are missing or empty.
+     */
     public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['sid']) || empty($config['token']) || empty($config['from'])) {
