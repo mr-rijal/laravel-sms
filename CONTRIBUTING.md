@@ -1,24 +1,25 @@
-# Contributing
+# Contributing to Laravel Pipeline
 
-Thank you for considering contributing to Laravel SMS.
+Thank you for considering contributing! Please follow these guidelines:
 
-## Guidelines
+## Code Style
 
-- Follow PSR-12 coding standards
-- Write tests for new features
-- Keep APIs backward compatible
-- Keep the DX Laravel-native
+- PSR-12 coding standard
+- Use Laravel conventions
+- Tests are mandatory for new features
 
-## Setup
+## Branching
 
-```bash
-git clone https://github.com/mr-rijal/laravel-sms
-cd laravel-sms
-composer install
-```
+- Use `main` as the stable branch
+- Create feature branches like `feature/xyz` or `bugfix/xyz`
 
-## Run tests:
+## Pull Requests
 
-```
-vendor/bin/phpunit
-```
+- Ensure tests pass before creating a PR
+- Include descriptive commit messages
+- Use your fork as the source
+
+## Issues
+
+- Bug reports and feature requests welcome
+- Include detailed steps to reproduce for bugs
