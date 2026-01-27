@@ -3,27 +3,12 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
-         cacheDirectory=".phpunit.cache"
-         executionOrder="depends,defects"
-         failOnRisky="true"
-         failOnWarning="true"
-         beStrictAboutOutputDuringTests="true"
-         processIsolation="false"
-         stopOnFailure="false">
+         cacheDirectory=".phpunit.cache">
     <testsuites>
-        <testsuite name="Test Suite">
+        <testsuite name="Laravel SMS Test Suite">
             <directory>./tests</directory>
         </testsuite>
     </testsuites>
-    <source>
-        <include>
-            <directory suffix=".php">./src</directory>
-        </include>
-        <exclude>
-            <directory>./vendor</directory>
-            <directory>./tests</directory>
-        </exclude>
-    </source>
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="CACHE_DRIVER" value="array"/>
@@ -31,4 +16,3 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
     </php>
 </phpunit>
-

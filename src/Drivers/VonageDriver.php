@@ -11,13 +11,13 @@ class VonageDriver implements SmsProvider
 {
     protected Client $client;
 
-    public function __construct(protected array $config)
+    public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['key']) || empty($config['secret']) || empty($config['from'])) {
             throw new \InvalidArgumentException('Vonage configuration is incomplete');
         }
 
-        $this->client = new Client([
+        $this->client = $client ?? new Client([
             'base_uri' => 'https://rest.nexmo.com/',
             'timeout' => 30,
         ]);

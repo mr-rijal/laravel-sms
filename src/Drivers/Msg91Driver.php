@@ -9,16 +9,19 @@ use MrRijal\LaravelSms\SmsMessage;
 
 class Msg91Driver implements SmsProvider
 {
-    public function __construct(protected array $config)
+    protected ?Client $client = null;
+
+    public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['authkey']) || empty($config['sender'])) {
             throw new \InvalidArgumentException('MSG91 configuration is incomplete');
         }
+        $this->client = $client;
     }
 
     public function send(SmsMessage $message): bool
     {
-        $client = new Client(['timeout' => 30]);
+        $client = $this->client ?? new Client(['timeout' => 30]);
 
         try {
             // If template is provided, use flow API

@@ -12,13 +12,13 @@ class TwilioDriver implements SmsProvider
 {
     protected Client $client;
 
-    public function __construct(protected array $config)
+    public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['sid']) || empty($config['token']) || empty($config['from'])) {
             throw new \InvalidArgumentException('Twilio configuration is incomplete');
         }
 
-        $this->client = new Client([
+        $this->client = $client ?? new Client([
             'base_uri' => 'https://api.twilio.com/2010-04-01/',
             'auth' => [$config['sid'], $config['token']],
             'timeout' => 30,

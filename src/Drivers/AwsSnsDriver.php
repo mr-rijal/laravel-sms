@@ -11,13 +11,13 @@ class AwsSnsDriver implements SmsProvider
 {
     protected SnsClient $client;
 
-    public function __construct(protected array $config)
+    public function __construct(protected array $config, ?SnsClient $client = null)
     {
         if (empty($config['key']) || empty($config['secret']) || empty($config['region'])) {
             throw new \InvalidArgumentException('AWS SNS configuration is incomplete. key, secret, and region are required.');
         }
 
-        $this->client = new SnsClient([
+        $this->client = $client ?? new SnsClient([
             'version' => 'latest',
             'region' => $config['region'],
             'credentials' => [

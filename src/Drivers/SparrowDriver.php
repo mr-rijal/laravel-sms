@@ -9,11 +9,14 @@ use MrRijal\LaravelSms\SmsMessage;
 
 class SparrowDriver implements SmsProvider
 {
-    public function __construct(protected array $config)
+    protected ?Client $client = null;
+
+    public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['token']) || empty($config['from'])) {
             throw new \InvalidArgumentException('Sparrow configuration is incomplete');
         }
+        $this->client = $client;
     }
 
     public function send(SmsMessage $message): bool
@@ -22,7 +25,7 @@ class SparrowDriver implements SmsProvider
             throw new \InvalidArgumentException('Message text or template ID is required');
         }
 
-        $client = new Client(['timeout' => 30]);
+        $client = $this->client ?? new Client(['timeout' => 30]);
 
         foreach ($message->getTo() as $to) {
             try {

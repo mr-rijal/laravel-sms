@@ -21,7 +21,7 @@ class WhatsAppDriver implements SmsProvider
     protected string $accessToken;
     protected string $businessAccountId;
 
-    public function __construct(protected array $config)
+    public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['phone_number_id']) || empty($config['access_token'])) {
             throw new \InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
@@ -32,7 +32,7 @@ class WhatsAppDriver implements SmsProvider
         $this->apiVersion = $config['api_version'] ?? 'v21.0';
         $this->businessAccountId = $config['business_account_id'] ?? '';
 
-        $this->client = new Client([
+        $this->client = $client ?? new Client([
             'base_uri' => "https://graph.facebook.com/{$this->apiVersion}/",
             'timeout' => 30,
         ]);
