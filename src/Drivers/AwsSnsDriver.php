@@ -11,6 +11,15 @@ class AwsSnsDriver implements SmsProvider
 {
     protected SnsClient $client;
 
+    /**
+     * Create a new AwsSnsDriver and initialize its SNS client.
+     *
+     * The $config array must contain the keys 'key', 'secret', and 'region'.
+     *
+     * @param array $config AWS configuration with required keys: 'key', 'secret', and 'region'.
+     * @param SnsClient|null $client Optional preconfigured SNS client to use; if omitted a new client is created from $config.
+     * @throws \InvalidArgumentException If any of 'key', 'secret', or 'region' are missing from $config.
+     */
     public function __construct(protected array $config, ?SnsClient $client = null)
     {
         if (empty($config['key']) || empty($config['secret']) || empty($config['region'])) {

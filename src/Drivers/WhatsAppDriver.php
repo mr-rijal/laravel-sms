@@ -21,6 +21,16 @@ class WhatsAppDriver implements SmsProvider
     protected string $accessToken;
     protected string $businessAccountId;
 
+    /**
+     * Initialize the driver with WhatsApp Business API configuration and an optional Guzzle client.
+     *
+     * The `$config` array must include the keys `phone_number_id` and `access_token`. Optional keys:
+     * `api_version` (defaults to "v21.0") and `business_account_id`.
+     *
+     * @param array $config WhatsApp configuration array with required keys `phone_number_id` and `access_token`; optional `api_version` and `business_account_id`.
+     * @param Client|null $client Optional Guzzle HTTP client to use for API requests. If null, a client is created with the Graph API base URI for the configured API version and a 30-second timeout.
+     * @throws \InvalidArgumentException If `phone_number_id` or `access_token` is missing from `$config`.
+     */
     public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['phone_number_id']) || empty($config['access_token'])) {

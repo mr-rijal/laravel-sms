@@ -11,6 +11,13 @@ class SparrowDriver implements SmsProvider
 {
     protected ?Client $client = null;
 
+    /**
+     * Create a SparrowDriver with the given configuration and optional HTTP client.
+     *
+     * @param array $config Configuration array that must include non-empty 'token' and 'from' keys.
+     * @param \GuzzleHttp\Client|null $client Optional Guzzle HTTP client to use for requests; when omitted a client will be created when sending.
+     * @throws \InvalidArgumentException If the 'token' or 'from' configuration is missing or empty.
+     */
     public function __construct(protected array $config, ?Client $client = null)
     {
         if (empty($config['token']) || empty($config['from'])) {
@@ -19,6 +26,14 @@ class SparrowDriver implements SmsProvider
         $this->client = $client;
     }
 
+    /**
+     * Send an SMS to every recipient in the given SmsMessage via the Sparrow SMS API.
+     *
+     * @param SmsMessage $message Message containing recipients and content; must include text or a template ID.
+     * @return bool `true` if all messages were sent successfully.
+     * @throws \InvalidArgumentException If the message has neither text nor a template ID.
+     * @throws \RuntimeException If an HTTP request fails or Sparrow returns a non-200 response.
+     */
     public function send(SmsMessage $message): bool
     {
         if (empty($message->getText()) && empty($message->getTemplateId())) {
