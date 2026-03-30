@@ -42,8 +42,15 @@ class WhatsAppDriver implements SmsProvider
             throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
         }
 
-        $this->phoneNumberId = (string) $config['phone_number_id'];
-        $this->accessToken = (string) $config['access_token'];
+        $trimmedPhoneNumberId = trim((string) $config['phone_number_id']);
+        $trimmedAccessToken = trim((string) $config['access_token']);
+
+        if ($trimmedPhoneNumberId === '' || $trimmedAccessToken === '') {
+            throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
+        }
+
+        $this->phoneNumberId = $trimmedPhoneNumberId;
+        $this->accessToken = $trimmedAccessToken;
         $this->apiVersion = isset($config['api_version']) && is_string($config['api_version']) ? $config['api_version'] : 'v21.0';
         $this->businessAccountId = isset($config['business_account_id']) && is_string($config['business_account_id'])
             ? $config['business_account_id']
@@ -188,6 +195,10 @@ class WhatsAppDriver implements SmsProvider
             }
         }
 
+        if (! preg_match('/\d/', $normalized) || $normalized === '+' || $normalized === '') {
+            throw new RuntimeException('Invalid phone number.');
+        }
+
         return $normalized;
     }
 
@@ -295,7 +306,7 @@ class WhatsAppDriver implements SmsProvider
         $token = $request->query('hub_verify_token');
         $challenge = $request->query('hub_challenge');
 
-        if ($mode !== 'subscribe' || $challenge === null || ! is_string($token)) {
+        if ($mode !== 'subscribe' || ! is_string($challenge) || ! is_string($token)) {
             return response('Forbidden', 403);
         }
 
@@ -307,7 +318,7 @@ class WhatsAppDriver implements SmsProvider
             'challenge' => $challenge,
         ]);
 
-        return response((string) $challenge, 200);
+        return response($challenge, 200);
     }
 
     protected function verifyWebhook(Request $request, string $secret): bool
