@@ -338,7 +338,7 @@ Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for det
 
 ## Security
 
-If you discover a security issue, please email [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com) instead of opening an issue.
+If you discover a security issue, please email [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com) instead of opening an issue. See [SECURITY.md](SECURITY.md) for the full policy.
 
 ## Credits
 
