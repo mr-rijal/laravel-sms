@@ -24,7 +24,7 @@ jobs:
           tools: composer:v2
 
       - name: Cache Composer cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.composer/cache/files
           key: composer-cache-pint-${{ hashFiles('**/composer.lock') }}
@@ -49,7 +49,7 @@ jobs:
           tools: composer:v2
 
       - name: Cache Composer cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.composer/cache/files
           key: composer-cache-phpstan-${{ hashFiles('**/composer.lock') }}
@@ -85,7 +85,7 @@ jobs:
           coverage: none
 
       - name: Cache Composer cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.composer/cache/files
           key: composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ hashFiles('**/composer.lock') }}
@@ -112,7 +112,7 @@ jobs:
           tools: composer:v2
 
       - name: Cache Composer cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.composer/cache/files
           key: composer-lowest-${{ hashFiles('**/composer.json') }}
