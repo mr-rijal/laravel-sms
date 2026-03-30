@@ -3,12 +3,19 @@
 namespace MrRijal\LaravelSms\Tests;
 
 use Illuminate\Foundation\Application;
+use Illuminate\Testing\TestResponse;
 use MrRijal\LaravelSms\Facades\Sms;
 use MrRijal\LaravelSms\SmsServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Orchestra Testbench sets this from {@see BaseTestCase::setUp()} using late static binding.
+     * PHP 8.2+ requires the property to exist on the class hierarchy (older Testbench did not declare it).
+     */
+    protected static ?TestResponse $latestResponse = null;
+
     /**
      * Register package service providers for the test application.
      *
