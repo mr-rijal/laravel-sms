@@ -25,7 +25,7 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 
 ## Requirements
 
-- PHP 8.2 or higher
+- PHP 8.2 or higher on Laravel 11–12; Laravel 13 requires PHP 8.3 or higher (upstream constraint)
 - Laravel 11.x and above
 - Guzzle HTTP (required by drivers that call APIs)
 
@@ -320,7 +320,7 @@ vendor/bin/phpunit
 
 ### Continuous integration
 
-Pull requests and pushes to `main` run [GitHub Actions](https://github.com/mr-rijal/laravel-sms/actions): **Pint** (code style), **PHPStan** (Larastan), **PHPUnit** across PHP 8.2–8.4 with Laravel 11–13, plus a **lowest-dependencies** sanity job.
+Pull requests and pushes to `main` run [GitHub Actions](https://github.com/mr-rijal/laravel-sms/actions): **Pint** (code style), **PHPStan** (Larastan), **PHPUnit** across PHP 8.2–8.4 with Laravel 11–13 (Laravel 13 runs on PHP 8.3+ only, per Laravel’s requirement), plus a **lowest-dependencies** sanity job.
 
 Run the same checks locally:
 
