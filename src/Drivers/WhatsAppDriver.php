@@ -16,9 +16,13 @@ use MrRijal\LaravelSms\SmsMessage;
 class WhatsAppDriver implements SmsProvider
 {
     protected Client $client;
+
     protected string $apiVersion;
+
     protected string $phoneNumberId;
+
     protected string $accessToken;
+
     protected string $businessAccountId;
 
     /**
@@ -27,8 +31,9 @@ class WhatsAppDriver implements SmsProvider
      * The `$config` array must include the keys `phone_number_id` and `access_token`. Optional keys:
      * `api_version` (defaults to "v21.0") and `business_account_id`.
      *
-     * @param array $config WhatsApp configuration array with required keys `phone_number_id` and `access_token`; optional `api_version` and `business_account_id`.
-     * @param Client|null $client Optional Guzzle HTTP client to use for API requests. If null, a client is created with the Graph API base URI for the configured API version and a 30-second timeout.
+     * @param  array  $config  WhatsApp configuration array with required keys `phone_number_id` and `access_token`; optional `api_version` and `business_account_id`.
+     * @param  Client|null  $client  Optional Guzzle HTTP client to use for API requests. If null, a client is created with the Graph API base URI for the configured API version and a 30-second timeout.
+     *
      * @throws \InvalidArgumentException If `phone_number_id` or `access_token` is missing from `$config`.
      */
     public function __construct(protected array $config, ?Client $client = null)

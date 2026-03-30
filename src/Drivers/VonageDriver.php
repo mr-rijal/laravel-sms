@@ -18,8 +18,9 @@ class VonageDriver implements SmsProvider
      * client is provided, a Guzzle HTTP client is created with Vonage's base URI
      * and a 30 second timeout.
      *
-     * @param array $config Associative array with required keys: `key`, `secret`, and `from`.
-     * @param Client|null $client Optional Guzzle HTTP client to use for requests.
+     * @param  array  $config  Associative array with required keys: `key`, `secret`, and `from`.
+     * @param  Client|null  $client  Optional Guzzle HTTP client to use for requests.
+     *
      * @throws \InvalidArgumentException If any of `key`, `secret`, or `from` are missing or empty.
      */
     public function __construct(protected array $config, ?Client $client = null)

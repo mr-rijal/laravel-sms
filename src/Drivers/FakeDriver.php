@@ -11,7 +11,7 @@ class FakeDriver implements SmsProvider
 
     public function __construct(array $config = [])
     {
-        // optional config
+        // Config accepted for parity with other drivers when resolved from config.
     }
 
     public function send(SmsMessage $message): bool
@@ -26,7 +26,7 @@ class FakeDriver implements SmsProvider
         return true;
     }
 
-    public static function reset()
+    public static function reset(): void
     {
         self::$messages = [];
     }

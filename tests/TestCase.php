@@ -2,6 +2,8 @@
 
 namespace MrRijal\LaravelSms\Tests;
 
+use Illuminate\Foundation\Application;
+use MrRijal\LaravelSms\Facades\Sms;
 use MrRijal\LaravelSms\SmsServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 
@@ -10,7 +12,7 @@ abstract class TestCase extends BaseTestCase
     /**
      * Register package service providers for the test application.
      *
-     * @param \Illuminate\Foundation\Application $app The application instance used by the testbench.
+     * @param  Application  $app  The application instance used by the testbench.
      * @return array List of service provider class names to register.
      */
     protected function getPackageProviders($app): array
@@ -26,7 +28,7 @@ abstract class TestCase extends BaseTestCase
     protected function getPackageAliases($app): array
     {
         return [
-            'Sms' => \MrRijal\LaravelSms\Facades\Sms::class,
+            'Sms' => Sms::class,
         ];
     }
 
@@ -35,7 +37,7 @@ abstract class TestCase extends BaseTestCase
      *
      * Sets default SMS driver to "fake" and disables SMS queuing.
      *
-     * @param \Illuminate\Contracts\Foundation\Application|\Illuminate\Foundation\Application $app The application container for the test environment.
+     * @param  \Illuminate\Contracts\Foundation\Application|Application  $app  The application container for the test environment.
      */
     protected function defineEnvironment($app): void
     {

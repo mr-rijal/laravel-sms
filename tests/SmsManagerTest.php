@@ -127,7 +127,7 @@ class SmsManagerTest extends TestCase
             ->message('Scheduled')
             ->sendLaterAt($datetime);
 
-        Queue::assertPushed(SendSmsJob::class, function ($job) use ($datetime) {
+        Queue::assertPushed(SendSmsJob::class, function ($job) {
             return $job->provider === 'fake' && $job->message->getText() === 'Scheduled';
         });
 
@@ -156,5 +156,28 @@ class SmsManagerTest extends TestCase
         $this->expectExceptionMessage('SMS driver [unknown_driver] not configured');
 
         Sms::provider('unknown_driver')->to('9812345678')->message('Hi')->sendNow();
+    }
+
+    public function test_random_provider_uses_configured_driver(): void
+    {
+        $this->app['config']->set('sms.random_drivers', ['fake']);
+
+        Sms::provider('random')
+            ->to('9812345678')
+            ->message('Random path')
+            ->sendNow();
+
+        $this->assertCount(1, FakeDriver::$messages);
+        $this->assertSame('Random path', FakeDriver::$messages[0]['message']);
+    }
+
+    public function test_random_provider_throws_when_no_drivers_configured(): void
+    {
+        $this->app['config']->set('sms.random_drivers', []);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('No drivers configured for random selection');
+
+        Sms::provider('random')->to('9812345678')->message('Hi')->sendNow();
     }
 }

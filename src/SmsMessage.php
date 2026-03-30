@@ -5,8 +5,11 @@ namespace MrRijal\LaravelSms;
 class SmsMessage
 {
     private array $to = [];
+
     private ?string $text = null;
+
     private ?string $templateId = null;
+
     private array $variables = [];
 
     /**

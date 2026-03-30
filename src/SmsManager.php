@@ -16,7 +16,9 @@ class SmsManager
     use Macroable;
 
     protected SmsMessage $message;
+
     protected string $provider;
+
     protected array $driverCache = [];
 
     public function __construct()
@@ -64,7 +66,7 @@ class SmsManager
     /**
      * Send SMS immediately
      *
-     * @throws \InvalidArgumentException
+     * @throws InvalidArgumentException
      * @throws \RuntimeException
      */
     public function sendNow(): bool
@@ -175,7 +177,7 @@ class SmsManager
         if ($this->provider === 'random') {
             $drivers = config('sms.random_drivers', []);
             if (empty($drivers)) {
-                throw new \InvalidArgumentException('No drivers configured for random selection');
+                throw new InvalidArgumentException('No drivers configured for random selection');
             }
 
             return $drivers[array_rand($drivers)];

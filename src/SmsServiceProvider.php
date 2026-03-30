@@ -15,8 +15,8 @@ class SmsServiceProvider extends ServiceProvider
         $this->app->singleton('laravel-sms', fn () => new SmsManager);
 
         // Register SMS notification channel
-        $this->app->make(ChannelManager::class)->extend('sms', function ($app) {
-            return new SmsChannel($app['laravel-sms']);
+        $this->app->make(ChannelManager::class)->extend('sms', function () {
+            return new SmsChannel;
         });
     }
 

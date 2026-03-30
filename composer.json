@@ -2,6 +2,7 @@
     "name": "mr-rijal/laravel-sms",
     "description": "Unified, extensible SMS gateway for Laravel",
     "type": "library",
+    "version": "1.0.1",
     "license": "MIT",
     "authors": [
         {
@@ -44,6 +45,11 @@
         ],
         "analyse": [
             "vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=2G"
+        ],
+        "ci": [
+            "@format:test",
+            "@analyse",
+            "@test"
         ]
     },
     "extra": {

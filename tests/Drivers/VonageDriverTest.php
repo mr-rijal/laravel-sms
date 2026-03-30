@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\VonageDriver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -20,7 +21,7 @@ class VonageDriverTest extends TestCase
             'from' => 'SENDER',
         ]);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_key_missing(): void

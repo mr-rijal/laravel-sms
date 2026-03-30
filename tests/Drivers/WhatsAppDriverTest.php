@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\WhatsAppDriver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -19,7 +20,7 @@ class WhatsAppDriverTest extends TestCase
             'access_token' => 'token',
         ]);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_phone_number_id_missing(): void
