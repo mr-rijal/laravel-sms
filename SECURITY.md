@@ -1,82 +1,60 @@
-# 🔐 Security Policy
+# Security policy
 
-Thank you for helping keep **mr-rijal/laravel-pipeline** and its users safe. We take security seriously and appreciate responsible disclosure of vulnerabilities.
+Thank you for helping keep **mr-rijal/laravel-sms** and its users safe. We take security seriously and appreciate responsible disclosure of vulnerabilities.
 
----
-
-## 📬 Reporting a Vulnerability
+## Reporting a vulnerability
 
 If you discover a security issue, **do not open a public GitHub issue**.
 
-Instead, please report it privately via email:
+Report it privately by email: [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com)
 
-> **📧 [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com)**
+Include as much detail as possible:
 
-When reporting, please include as much detail as possible to help us investigate quickly:
+- A clear description of the vulnerability
+- Steps to reproduce
+- Affected versions (if known)
+- Proof-of-concept (if available)
+- Potential impact (credential exposure, webhook abuse, etc.)
 
-* A clear description of the vulnerability
-* Steps to reproduce the issue
-* Affected versions (if known)
-* Proof-of-concept (if available)
-* Potential impact (data leak, RCE, privilege escalation, etc.)
+You should receive an acknowledgment within **48 hours** in most cases.
 
-You will typically receive a response **within 48 hours** acknowledging your report.
-
----
-
-## 🛠️ Supported Versions
+## Supported versions
 
 Only the **latest major release** of this package is actively supported with security updates.
 
 | Version | Supported |
 | ------- | --------- |
-| Latest  | ✅ Yes     |
-| Older   | ❌ No      |
+| Latest  | Yes       |
+| Older   | No        |
 
-We strongly recommend keeping your installation up to date to receive the latest security fixes.
+Keep Laravel, PHP, and dependencies up to date.
 
----
-
-## ⏳ Disclosure Process
-
-We follow a responsible disclosure process:
+## Disclosure process
 
 1. You report the vulnerability privately
-2. We confirm and investigate the issue
+2. We confirm and investigate
 3. A fix is developed and tested
-4. A security release is published
-5. Public disclosure is made (if appropriate)
+4. A release is published when ready
+5. Public disclosure may follow, as appropriate
 
-Please allow reasonable time for us to resolve the issue before making it public.
+Please allow reasonable time before public disclosure.
 
----
+## Security practices for users
 
-## 🔍 Security Best Practices for Users
+When using this package in production:
 
-We recommend the following when using this package in production:
+- Store provider credentials in environment variables or a secrets manager, not in source control
+- Restrict webhook routes (HTTPS, IP allowlists or signature verification where your driver supports it)
+- Limit who can trigger SMS sends in your app (rate limits, auth, auditing)
+- Review logs so message bodies and phone numbers are not exposed unnecessarily
+- Keep `guzzlehttp/guzzle`, `aws/aws-sdk-php`, and Laravel patched
 
-* Always validate and sanitize input passed into pipeline steps
-* Avoid executing untrusted classes or closures
-* Run pipelines with least-privilege service accounts
-* Keep Laravel and PHP dependencies up to date
-* Enable logging and monitoring for pipeline execution failures
+## Non-security bugs
 
----
+Use **GitHub Issues** for general bugs and features. Security concerns should go to the email above.
 
-## 🧪 Reporting Non-Security Bugs
+## Acknowledgments
 
-For general bugs, feature requests, or questions, please use:
+Contributors who responsibly disclose vulnerabilities may be credited in release notes upon request.
 
-> 🐛 **GitHub Issues**
-
-Security-related concerns should always be sent by email instead of public channels.
-
----
-
-## 🙏 Acknowledgments
-
-We appreciate the community’s efforts in helping make open-source software safer. Contributors who responsibly disclose vulnerabilities may be credited in release notes (upon request).
-
----
-
-**Thank you for helping keep Laravel Pipeline secure.** 🚀
+Thank you for helping keep this project secure.

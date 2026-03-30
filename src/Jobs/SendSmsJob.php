@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Jobs;
 
 use Illuminate\Bus\Queueable;
@@ -10,70 +12,64 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use MrRijal\LaravelSms\SmsManager;
 use MrRijal\LaravelSms\SmsMessage;
+use Throwable;
 
 class SendSmsJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
+
+    public int $tries = 3;
+
+    public int $timeout = 30;
 
     /**
-     * Number of times the job may be attempted
+     * @var list<int>
      */
-    public $tries = 3;
-
-    /**
-     * The number of seconds the job can run before timing out
-     */
-    public $timeout = 30;
-
-    /**
-     * Exponential backoff delays (in seconds)
-     */
-    public $backoff = [10, 30, 60];
+    public array $backoff = [10, 30, 60];
 
     public function __construct(
         public SmsMessage $message,
-        public string $provider
+        public string $provider,
     ) {}
 
     /**
-     * Execute the job
+     * @throws Throwable
      */
     public function handle(SmsManager $smsManager): void
     {
         try {
             Log::info('Processing queued SMS', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
                 'attempt' => $this->attempts(),
             ]);
 
             $smsManager->sendMessage($this->message, $this->provider);
-        } catch (\Exception $e) {
+        } catch (Throwable $e) {
             Log::error('SMS job failed', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
             ]);
 
-            // Re-throw to trigger retry mechanism
             throw $e;
         }
     }
 
-    /**
-     * Handle a job failure
-     */
-    public function failed(\Throwable $exception): void
+    public function failed(Throwable $exception): void
     {
         Log::error('SMS job failed after all retries', [
             'provider' => $this->provider,
-            'recipients' => $this->message->getTo(),
+            'recipients' => $this->message->getRedactedRecipientsForLogging(),
+            'template_id' => $this->message->getTemplateId(),
             'error' => $exception->getMessage(),
             'trace' => $exception->getTraceAsString(),
         ]);
-
-        // Optionally dispatch a failed event
-        // Event::dispatch(new SmsFailed($this->message, $this->provider, $exception));
     }
 }

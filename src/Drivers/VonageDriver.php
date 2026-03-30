@@ -1,31 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use InvalidArgumentException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
+use RuntimeException;
 
 class VonageDriver implements SmsProvider
 {
     protected Client $client;
 
     /**
-     * Initialize the VonageDriver with configuration and an optional HTTP client.
-     *
-     * Configuration array must include the keys `key`, `secret`, and `from`. If no
-     * client is provided, a Guzzle HTTP client is created with Vonage's base URI
-     * and a 30 second timeout.
-     *
-     * @param array $config Associative array with required keys: `key`, `secret`, and `from`.
-     * @param Client|null $client Optional Guzzle HTTP client to use for requests.
-     * @throws \InvalidArgumentException If any of `key`, `secret`, or `from` are missing or empty.
+     * @param  array<string, mixed>  $config  key, secret, from
      */
-    public function __construct(protected array $config, ?Client $client = null)
-    {
+    public function __construct(
+        #[\SensitiveParameter]
+        protected array $config,
+        ?Client $client = null,
+    ) {
         if (empty($config['key']) || empty($config['secret']) || empty($config['from'])) {
-            throw new \InvalidArgumentException('Vonage configuration is incomplete');
+            throw new InvalidArgumentException('Vonage configuration is incomplete');
         }
 
         $this->client = $client ?? new Client([
@@ -36,30 +35,39 @@ class VonageDriver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
-        if (empty($message->getText()) && empty($message->getTemplateId())) {
-            throw new \InvalidArgumentException('Message text or template ID is required');
+        if ($message->getText() === null && $message->getTemplateId() === null) {
+            throw new InvalidArgumentException('Message text or template ID is required');
         }
 
         foreach ($message->getTo() as $to) {
             try {
                 $response = $this->client->post('sms/json', [
                     'form_params' => [
-                        'api_key' => $this->config['key'],
-                        'api_secret' => $this->config['secret'],
-                        'from' => $this->config['from'],
+                        'api_key' => (string) $this->config['key'],
+                        'api_secret' => (string) $this->config['secret'],
+                        'from' => (string) $this->config['from'],
                         'to' => $to,
                         'text' => $message->getText() ?? '',
                     ],
                 ]);
 
-                $result = json_decode($response->getBody()->getContents(), true);
+                $raw = $response->getBody()->getContents();
+                /** @var mixed $result */
+                $result = json_decode($raw, true);
 
-                if (! isset($result['messages'][0]['status']) || $result['messages'][0]['status'] !== '0') {
-                    $errorText = $result['messages'][0]['error-text'] ?? 'Unknown error';
-                    throw new \RuntimeException("Failed to send SMS via Vonage: {$errorText}");
+                if (! is_array($result) || ! isset($result['messages']) || ! is_array($result['messages'])) {
+                    throw new RuntimeException('Failed to send SMS via Vonage: Invalid API response');
+                }
+
+                $first = $result['messages'][0] ?? null;
+                if (! is_array($first) || ($first['status'] ?? null) !== '0') {
+                    $errorText = is_array($first) && isset($first['error-text']) && is_string($first['error-text'])
+                        ? $first['error-text']
+                        : 'Unknown error';
+                    throw new RuntimeException("Failed to send SMS via Vonage: {$errorText}");
                 }
             } catch (GuzzleException $e) {
-                throw new \RuntimeException(
+                throw new RuntimeException(
                     "Failed to send SMS via Vonage: {$e->getMessage()}",
                     0,
                     $e

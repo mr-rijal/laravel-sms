@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\Msg91Driver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -16,7 +17,7 @@ class Msg91DriverTest extends TestCase
     {
         $driver = new Msg91Driver(['authkey' => 'key', 'sender' => 'SENDER']);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_authkey_missing(): void
@@ -40,6 +41,17 @@ class Msg91DriverTest extends TestCase
         $driver = new Msg91Driver(['authkey' => 'key', 'sender' => 'SENDER']);
 
         $this->assertInstanceOf(Msg91Driver::class, $driver);
+    }
+
+    public function test_send_throws_when_no_text_or_template(): void
+    {
+        $driver = new Msg91Driver(['authkey' => 'key', 'sender' => 'SENDER']);
+        $message = (new SmsMessage)->to('9812345678');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Message text or template ID is required');
+
+        $driver->send($message);
     }
 
     public function test_send_plain_text_success_with_mock_client(): void

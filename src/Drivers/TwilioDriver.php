@@ -1,76 +1,75 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
+use InvalidArgumentException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
+use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
 
 class TwilioDriver implements SmsProvider
 {
     protected Client $client;
 
     /**
-     * Create a TwilioDriver instance using the provided configuration and optional HTTP client.
-     *
-     * The configuration must include Twilio credentials and a sender number. If `$client` is null,
-     * a default Guzzle client configured for the Twilio API will be created using the provided
-     * credentials.
-     *
-     * @param array $config Required keys: 'sid' (Twilio Account SID), 'token' (Auth token), and 'from' (sender phone number).
-     * @param \GuzzleHttp\Client|null $client Optional pre-configured HTTP client to use for requests.
-     * @throws \InvalidArgumentException If any of the required configuration keys are missing or empty.
+     * @param  array<string, mixed>  $config  sid, token, from
      */
-    public function __construct(protected array $config, ?Client $client = null)
-    {
+    public function __construct(
+        #[\SensitiveParameter]
+        protected array $config,
+        ?Client $client = null,
+    ) {
         if (empty($config['sid']) || empty($config['token']) || empty($config['from'])) {
-            throw new \InvalidArgumentException('Twilio configuration is incomplete');
+            throw new InvalidArgumentException('Twilio configuration is incomplete');
         }
+
+        $sid = (string) $config['sid'];
+        $token = (string) $config['token'];
 
         $this->client = $client ?? new Client([
             'base_uri' => 'https://api.twilio.com/2010-04-01/',
-            'auth' => [$config['sid'], $config['token']],
+            'auth' => [$sid, $token],
             'timeout' => 30,
         ]);
     }
 
     public function send(SmsMessage $message): bool
     {
-        if (empty($message->getText()) && empty($message->getTemplateId())) {
-            throw new \InvalidArgumentException('Message text or template ID is required');
+        $rawText = $message->getText();
+        $body = $rawText !== null ? trim($rawText) : '';
+
+        if ($body === '') {
+            throw new InvalidArgumentException('Twilio SMS requires a non-empty message body; template-only messages are not supported.');
         }
+
+        $accountSid = (string) $this->config['sid'];
 
         foreach ($message->getTo() as $to) {
             try {
                 $response = $this->client->post(
-                    "Accounts/{$this->config['sid']}/Messages.json",
+                    "Accounts/{$accountSid}/Messages.json",
                     [
                         'form_params' => [
-                            'From' => $this->config['from'],
+                            'From' => (string) $this->config['from'],
                             'To' => $to,
-                            'Body' => $message->getText() ?? '',
+                            'Body' => $body,
                         ],
                     ]
                 );
 
-                $statusCode = $response->getStatusCode();
-                $body = json_decode($response->getBody()->getContents(), true);
-
-                if ($statusCode !== 201) {
-                    $errorMessage = $body['message'] ?? $response->getBody()->getContents();
-                    throw new \RuntimeException(
-                        "Failed to send SMS via Twilio: {$errorMessage}",
-                        $statusCode
-                    );
-                }
+                $this->assertTwilioSuccess($response);
             } catch (GuzzleException $e) {
                 $statusCode = 0;
                 if ($e instanceof RequestException && $e->hasResponse()) {
                     $statusCode = $e->getResponse()->getStatusCode();
                 }
-                throw new \RuntimeException(
+                throw new RuntimeException(
                     "Failed to send SMS via Twilio: {$e->getMessage()}",
                     $statusCode,
                     $e
@@ -79,5 +78,23 @@ class TwilioDriver implements SmsProvider
         }
 
         return true;
+    }
+
+    private function assertTwilioSuccess(ResponseInterface $response): void
+    {
+        $statusCode = $response->getStatusCode();
+        $raw = $response->getBody()->getContents();
+        /** @var mixed $body */
+        $body = json_decode($raw, true);
+
+        if ($statusCode !== 201) {
+            $errorMessage = is_array($body) && isset($body['message']) && is_string($body['message'])
+                ? $body['message']
+                : $raw;
+            throw new RuntimeException(
+                "Failed to send SMS via Twilio: {$errorMessage}",
+                $statusCode
+            );
+        }
     }
 }

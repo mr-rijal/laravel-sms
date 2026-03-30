@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\TwilioDriver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -20,7 +21,7 @@ class TwilioDriverTest extends TestCase
             'from' => '+15551234567',
         ]);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_sid_missing(): void
@@ -67,7 +68,7 @@ class TwilioDriverTest extends TestCase
         $this->assertInstanceOf(TwilioDriver::class, $driver);
     }
 
-    public function test_send_throws_when_no_text_or_template(): void
+    public function test_send_throws_when_no_body_text(): void
     {
         $driver = new TwilioDriver([
             'sid' => 'AC123',
@@ -77,7 +78,22 @@ class TwilioDriverTest extends TestCase
         $message = (new SmsMessage)->to('+15559876543');
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Message text or template ID is required');
+        $this->expectExceptionMessage('Twilio SMS requires a non-empty message body');
+
+        $driver->send($message);
+    }
+
+    public function test_send_throws_when_template_only_without_body_text(): void
+    {
+        $driver = new TwilioDriver([
+            'sid' => 'AC123',
+            'token' => 'secret',
+            'from' => '+15551234567',
+        ]);
+        $message = (new SmsMessage)->to('+15559876543')->template('TP123', ['x' => 'y']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Twilio SMS requires a non-empty message body');
 
         $driver->send($message);
     }

@@ -3,7 +3,7 @@
 [![Workflow](https://img.shields.io/github/actions/workflow/status/mr-rijal/laravel-sms/.github%2Fworkflows%2Fci.yml
 )](https://github.com/mr-rijal/laravel-sms/actions)
 [![Latest Version](https://img.shields.io/packagist/v/mr-rijal/laravel-sms.svg)](https://packagist.org/packages/mr-rijal/laravel-sms)
-![PHP](https://img.shields.io/badge/PHP-8.4-777BB4?style=flat&logo=php&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat&logo=php&logoColor=white)
 [![Latest Stable Version](https://poser.pugx.org/mr-rijal/laravel-sms/v)](https://packagist.org/packages/mr-rijal/laravel-sms)
 [![License](https://img.shields.io/packagist/l/mr-rijal/laravel-sms)](LICENSE)
 [![Downloads](https://img.shields.io/packagist/dt/mr-rijal/laravel-sms.svg)](https://packagist.org/packages/mr-rijal/laravel-sms)
@@ -25,8 +25,8 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 
 ## Requirements
 
-- PHP 8.2 or higher
-- Laravel 11.x or 12.x
+- PHP 8.2 or higher on Laravel 11–12; Laravel 13 requires PHP 8.3 or higher (upstream constraint)
+- Laravel 11.x and above
 - Guzzle HTTP (required by drivers that call APIs)
 
 ## Installation
@@ -318,6 +318,16 @@ composer test
 vendor/bin/phpunit
 ```
 
+### Continuous integration
+
+Pull requests and pushes to `main` run [GitHub Actions](https://github.com/mr-rijal/laravel-sms/actions): **Pint** (code style), **PHPStan** (Larastan), **PHPUnit** across PHP 8.2–8.4 with Laravel 11–13 (Laravel 13 runs on PHP 8.3+ only, per Laravel’s requirement), plus a **lowest-dependencies** sanity job.
+
+Run the same checks locally:
+
+```bash
+composer ci
+```
+
 ## Changelog
 
 Please see [Releases](https://github.com/mr-rijal/laravel-sms/releases) for a changelog.
@@ -328,12 +338,16 @@ Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for det
 
 ## Security
 
-If you discover a security issue, please email [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com) instead of opening an issue.
+If you discover a security issue, please email [prashantrijal.721@gmail.com](mailto:prashantrijal.721@gmail.com) instead of opening an issue. See [SECURITY.md](SECURITY.md) for the full policy.
 
 ## Credits
 
 - [Prashant Rijal](https://github.com/mr-rijal)
 - [All contributors](https://github.com/mr-rijal/laravel-sms/contributors)
+
+## Support
+
+If this package is useful to you, you can support its maintenance via [buymemomo.com/rijal](https://buymemomo.com/rijal).
 
 ## License
 

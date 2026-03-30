@@ -1,10 +1,2 @@
 includes:
-    - ./vendor/larastan/larastan/extension.neon
-
-parameters:
-    level: max
-    paths:
-        - src
-    excludePaths:
-        - tests
-    inferPrivatePropertyTypeFromConstructor: true
+    - phpstan.neon.dist

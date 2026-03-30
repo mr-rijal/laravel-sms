@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # Raise gradually; level max is enforced locally via phpstan.neon if desired.
+    level: 5
+    paths:
+        - src
+    excludePaths:
+        - tests
+    inferPrivatePropertyTypeFromConstructor: true
+    ignoreErrors:
+        # Intentionally unused by the package itself; consumed by applications.
+        - message: '#Trait MrRijal\\LaravelSms\\Traits\\HasSms is used zero times#'

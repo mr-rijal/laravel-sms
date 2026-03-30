@@ -2,6 +2,9 @@
 
 namespace MrRijal\LaravelSms\Tests\Drivers;
 
+use Aws\Result;
+use Aws\Sns\SnsClient;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\AwsSnsDriver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -16,7 +19,7 @@ class AwsSnsDriverTest extends TestCase
             'region' => 'us-east-1',
         ]);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_key_missing(): void
@@ -86,15 +89,16 @@ class AwsSnsDriverTest extends TestCase
 
     public function test_send_accepts_optional_sns_client_for_testing(): void
     {
-        $client = new class extends \Aws\Sns\SnsClient {
+        $client = new class extends SnsClient
+        {
             public function __construct()
             {
                 // Skip parent constructor for unit test double
             }
 
-            public function publish(array $args = []): \Aws\Result
+            public function publish(array $args = []): Result
             {
-                return new \Aws\Result(['MessageId' => 'test-msg-id']);
+                return new Result(['MessageId' => 'test-msg-id']);
             }
         };
 

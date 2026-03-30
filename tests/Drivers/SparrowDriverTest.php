@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\SparrowDriver;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Tests\TestCase;
@@ -16,7 +17,7 @@ class SparrowDriverTest extends TestCase
     {
         $driver = new SparrowDriver(['token' => 'token', 'from' => 'SENDER']);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_constructor_throws_when_token_missing(): void
@@ -46,6 +47,20 @@ class SparrowDriverTest extends TestCase
     {
         $driver = new SparrowDriver(['token' => 'token', 'from' => 'SENDER']);
         $message = (new SmsMessage)->to('9812345678');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Message text or template ID is required');
+
+        $driver->send($message);
+    }
+
+    public function test_send_throws_when_text_is_whitespace_only_without_template(): void
+    {
+        $driver = new SparrowDriver(['token' => 'token', 'from' => 'SENDER']);
+        $message = (new SmsMessage)->to('9812345678');
+        $textProp = new \ReflectionProperty(SmsMessage::class, 'text');
+        $textProp->setAccessible(true);
+        $textProp->setValue($message, '   ');
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Message text or template ID is required');

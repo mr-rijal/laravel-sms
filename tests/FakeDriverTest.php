@@ -2,6 +2,7 @@
 
 namespace MrRijal\LaravelSms\Tests;
 
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Drivers\FakeDriver;
 use MrRijal\LaravelSms\SmsMessage;
 
@@ -23,7 +24,7 @@ class FakeDriverTest extends TestCase
     {
         $driver = new FakeDriver([]);
 
-        $this->assertInstanceOf(\MrRijal\LaravelSms\Contracts\SmsProvider::class, $driver);
+        $this->assertInstanceOf(SmsProvider::class, $driver);
     }
 
     public function test_send_stores_plain_message(): void
