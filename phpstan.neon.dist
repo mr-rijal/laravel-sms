@@ -12,4 +12,3 @@ parameters:
     ignoreErrors:
         # Intentionally unused by the package itself; consumed by applications.
         - message: '#Trait MrRijal\\LaravelSms\\Traits\\HasSms is used zero times#'
-        - message: '#Constructor of class MrRijal\\LaravelSms\\Drivers\\FakeDriver has an unused parameter \$config#'

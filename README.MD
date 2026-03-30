@@ -3,7 +3,7 @@
 [![Workflow](https://img.shields.io/github/actions/workflow/status/mr-rijal/laravel-sms/.github%2Fworkflows%2Fci.yml
 )](https://github.com/mr-rijal/laravel-sms/actions)
 [![Latest Version](https://img.shields.io/packagist/v/mr-rijal/laravel-sms.svg)](https://packagist.org/packages/mr-rijal/laravel-sms)
-![PHP](https://img.shields.io/badge/PHP-8.4-777BB4?style=flat&logo=php&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat&logo=php&logoColor=white)
 [![Latest Stable Version](https://poser.pugx.org/mr-rijal/laravel-sms/v)](https://packagist.org/packages/mr-rijal/laravel-sms)
 [![License](https://img.shields.io/packagist/l/mr-rijal/laravel-sms)](LICENSE)
 [![Downloads](https://img.shields.io/packagist/dt/mr-rijal/laravel-sms.svg)](https://packagist.org/packages/mr-rijal/laravel-sms)
@@ -344,6 +344,10 @@ If you discover a security issue, please email [prashantrijal.721@gmail.com](mai
 
 - [Prashant Rijal](https://github.com/mr-rijal)
 - [All contributors](https://github.com/mr-rijal/laravel-sms/contributors)
+
+## Support
+
+If this package is useful to you, you can support its maintenance via [buymemomo.com/rijal](https://buymemomo.com/rijal).
 
 ## License
 

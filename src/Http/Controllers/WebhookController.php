@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Http\Controllers;
 
-use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsManager;
+use Throwable;
 
 class WebhookController
 {
@@ -15,15 +18,11 @@ class WebhookController
         protected SmsManager $smsManager
     ) {}
 
-    /**
-     * Handle incoming webhook from provider
-     */
     public function handle(Request $request, string $provider): Response
     {
         try {
             $driver = $this->resolveDriver($provider);
 
-            // Check if driver has handleWebhook method
             if (method_exists($driver, 'handleWebhook')) {
                 return $driver->handleWebhook($request);
             }
@@ -40,7 +39,7 @@ class WebhookController
             ]);
 
             return response('Provider not found', 404);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Webhook handling failed', [
                 'provider' => $provider,
                 'error' => $e->getMessage(),
@@ -50,29 +49,38 @@ class WebhookController
         }
     }
 
-    /**
-     * Resolve driver instance for webhook handling
-     */
-    protected function resolveDriver(string $provider)
+    protected function resolveDriver(string $provider): SmsProvider
     {
         $drivers = config('sms.drivers', []);
+        if (! is_array($drivers)) {
+            throw new InvalidArgumentException('sms.drivers must be an array.');
+        }
 
-        if (! isset($drivers[$provider])) {
+        if (! isset($drivers[$provider]) || (! is_string($drivers[$provider]) && ! is_array($drivers[$provider]))) {
             throw new InvalidArgumentException("SMS driver [{$provider}] not configured.");
         }
 
         $driverConfig = $drivers[$provider];
-
-        // Get provider config
         $providerConfig = config("sms.providers.{$provider}", []);
+        if (! is_array($providerConfig)) {
+            $providerConfig = [];
+        }
 
-        // if driverConfig is a class name string
         if (is_string($driverConfig)) {
+            if (! is_subclass_of($driverConfig, SmsProvider::class)) {
+                throw new InvalidArgumentException("Driver class [{$driverConfig}] must implement ".SmsProvider::class.'.');
+            }
+
             return new $driverConfig($providerConfig);
         }
-        // if driverConfig is array with 'class' key
-        if (is_array($driverConfig) && isset($driverConfig['class'])) {
-            return new $driverConfig['class']($driverConfig);
+
+        if (isset($driverConfig['class']) && is_string($driverConfig['class'])) {
+            $class = $driverConfig['class'];
+            if (! is_subclass_of($class, SmsProvider::class)) {
+                throw new InvalidArgumentException("Driver class [{$class}] must implement ".SmsProvider::class.'.');
+            }
+
+            return new $class($driverConfig);
         }
 
         throw new InvalidArgumentException("Driver {$provider} not implemented");

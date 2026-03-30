@@ -1,50 +1,61 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms;
 
 class SmsMessage
 {
+    /**
+     * @var list<string>
+     */
     private array $to = [];
 
     private ?string $text = null;
 
     private ?string $templateId = null;
 
+    /**
+     * @var array<string, mixed>
+     */
     private array $variables = [];
 
     /**
-     * Add recipient(s)
+     * Add recipient(s).
      *
-     * @param  string|array  $numbers  Phone number(s)
+     * @param  string|list<string>  $numbers  Phone number(s)
      *
      * @throws \InvalidArgumentException
      */
     public function to(string|array $numbers): self
     {
-        $numbers = (array) $numbers;
+        /** @var list<string> $raw */
+        $raw = is_array($numbers) ? $numbers : [$numbers];
 
-        foreach ($numbers as $number) {
+        $validated = [];
+        foreach ($raw as $number) {
             $number = trim((string) $number);
-            if (empty($number)) {
+            if ($number === '') {
                 continue;
             }
 
-            // Basic phone validation (E.164 format - more lenient to allow various formats)
-            // Allows: +1234567890, 1234567890, +0987654321, etc.
+            // Basic phone validation (E.164-ish — allows various formats).
             if (! preg_match('/^\+?\d{7,15}$/', $number)) {
                 throw new \InvalidArgumentException("Invalid phone number format: {$number}");
             }
+
+            $validated[] = $number;
         }
 
-        $this->to = array_unique(array_merge($this->to, $numbers));
+        /** @var list<string> $unique */
+        $unique = array_values(array_unique(array_merge($this->to, $validated)));
+        $this->to = $unique;
 
         return $this;
     }
 
     /**
-     * Set message text
-     *
-     * @param  string  $text  Message content
+     * Set message text.
      *
      * @throws \InvalidArgumentException
      */
@@ -52,11 +63,10 @@ class SmsMessage
     {
         $text = trim($text);
 
-        if (empty($text)) {
+        if ($text === '') {
             throw new \InvalidArgumentException('Message text cannot be empty');
         }
 
-        // SMS typically has a limit (1600 chars for concatenated SMS)
         if (strlen($text) > 1600) {
             throw new \InvalidArgumentException('SMS message cannot exceed 1600 characters');
         }
@@ -67,16 +77,15 @@ class SmsMessage
     }
 
     /**
-     * Set template ID and variables
+     * Set template ID and variables.
      *
-     * @param  string  $templateId  Template identifier
-     * @param  array  $vars  Template variables
+     * @param  array<string, mixed>  $vars
      *
      * @throws \InvalidArgumentException
      */
     public function template(string $templateId, array $vars = []): self
     {
-        if (empty($templateId)) {
+        if ($templateId === '') {
             throw new \InvalidArgumentException('Template ID cannot be empty');
         }
 
@@ -87,31 +96,25 @@ class SmsMessage
     }
 
     /**
-     * Get recipients
+     * @return list<string>
      */
     public function getTo(): array
     {
         return $this->to;
     }
 
-    /**
-     * Get message text
-     */
     public function getText(): ?string
     {
         return $this->text;
     }
 
-    /**
-     * Get template ID
-     */
     public function getTemplateId(): ?string
     {
         return $this->templateId;
     }
 
     /**
-     * Get template variables
+     * @return array<string, mixed>
      */
     public function getVariables(): array
     {
@@ -119,17 +122,17 @@ class SmsMessage
     }
 
     /**
-     * Validate message is ready to send
+     * Validate message is ready to send.
      *
      * @throws \InvalidArgumentException
      */
     public function validate(): void
     {
-        if (empty($this->to)) {
+        if ($this->to === []) {
             throw new \InvalidArgumentException('At least one recipient is required');
         }
 
-        if (empty($this->text) && empty($this->templateId)) {
+        if ($this->text === null && $this->templateId === null) {
             throw new \InvalidArgumentException('Message text or template ID is required');
         }
     }

@@ -1,14 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Traits;
 
 use MrRijal\LaravelSms\Facades\Sms;
 
 trait HasSms
 {
-    /**
-     * Send plain text Sms
-     */
+    abstract public function routeNotificationForSms(): string;
+
     public function sms(string $message): bool
     {
         return Sms::to($this->routeNotificationForSms())
@@ -16,16 +17,13 @@ trait HasSms
             ->sendNow();
     }
 
-    /**
-     * Alias (DX sugar)
-     */
     public function sendSms(string $message): bool
     {
         return $this->sms($message);
     }
 
     /**
-     * Send Sms using telecom template ID (DLT style)
+     * @param  array<string, mixed>  $variables
      */
     public function smsTemplate(string $templateId, array $variables = []): bool
     {
@@ -34,6 +32,9 @@ trait HasSms
             ->sendNow();
     }
 
+    /**
+     * @param  iterable<int, object&static>  $users
+     */
     public static function smsMany(iterable $users, string $message): void
     {
         foreach ($users as $user) {

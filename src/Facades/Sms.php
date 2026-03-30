@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MrRijal\LaravelSms\Facades;
 
+use DateTimeInterface;
 use Illuminate\Support\Facades\Facade;
 
 /**
@@ -11,7 +14,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \MrRijal\LaravelSms\SmsManager template(string $templateId, array $vars = [])
  * @method static bool sendNow()
  * @method static void sendLater()
- * @method static void sendLaterAt(\DateTimeInterface $datetime)
+ * @method static void sendLaterAt(DateTimeInterface $datetime)
  * @method static bool send()
  */
 class Sms extends Facade
