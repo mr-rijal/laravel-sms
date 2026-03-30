@@ -7,6 +7,18 @@ use MrRijal\LaravelSms\Http\Controllers\WebhookController;
 
 class WebhookControllerTest extends TestCase
 {
+    /**
+     * Real GET requests use a query string with dotted keys (hub.mode, ...); PHP exposes them as hub_mode, ...
+     *
+     * @param  array<string, string>  $facebookHubQuery  Keys use Facebook's dotted names; they are encoded into the URI.
+     */
+    private function createWhatsappVerificationRequest(array $facebookHubQuery): Request
+    {
+        $query = http_build_query($facebookHubQuery);
+
+        return Request::create("/laravel-sms/webhook/whatsapp?{$query}", 'GET');
+    }
+
     protected function defineEnvironment($app): void
     {
         parent::defineEnvironment($app);
@@ -43,15 +55,11 @@ class WebhookControllerTest extends TestCase
         $this->app['config']->set('sms.webhooks.whatsapp.verify_token', 'my-secret-token');
 
         $controller = new WebhookController($this->app->make('laravel-sms'));
-        $request = Request::create(
-            '/laravel-sms/webhook/whatsapp',
-            'GET',
-            [
-                'hub.mode' => 'subscribe',
-                'hub.verify_token' => 'my-secret-token',
-                'hub.challenge' => 'challenge-123',
-            ]
-        );
+        $request = $this->createWhatsappVerificationRequest([
+            'hub.mode' => 'subscribe',
+            'hub.verify_token' => 'my-secret-token',
+            'hub.challenge' => 'challenge-123',
+        ]);
 
         $response = $controller->handle($request, 'whatsapp');
 
@@ -64,15 +72,43 @@ class WebhookControllerTest extends TestCase
         $this->app['config']->set('sms.webhooks.whatsapp.verify_token', 'expected');
 
         $controller = new WebhookController($this->app->make('laravel-sms'));
-        $request = Request::create(
-            '/laravel-sms/webhook/whatsapp',
-            'GET',
-            [
-                'hub.mode' => 'subscribe',
-                'hub.verify_token' => 'wrong',
-                'hub.challenge' => 'challenge-123',
-            ]
-        );
+        $request = $this->createWhatsappVerificationRequest([
+            'hub.mode' => 'subscribe',
+            'hub.verify_token' => 'wrong',
+            'hub.challenge' => 'challenge-123',
+        ]);
+
+        $response = $controller->handle($request, 'whatsapp');
+
+        $this->assertSame(403, $response->getStatusCode());
+    }
+
+    public function test_whatsapp_get_verification_returns_403_when_verify_token_not_configured(): void
+    {
+        $this->app['config']->set('sms.webhooks.whatsapp', []);
+
+        $controller = new WebhookController($this->app->make('laravel-sms'));
+        $request = $this->createWhatsappVerificationRequest([
+            'hub.mode' => 'subscribe',
+            'hub.verify_token' => '',
+            'hub.challenge' => 'challenge-123',
+        ]);
+
+        $response = $controller->handle($request, 'whatsapp');
+
+        $this->assertSame(403, $response->getStatusCode());
+    }
+
+    public function test_whatsapp_get_verification_returns_403_when_verify_token_config_is_whitespace_only(): void
+    {
+        $this->app['config']->set('sms.webhooks.whatsapp.verify_token', '   ');
+
+        $controller = new WebhookController($this->app->make('laravel-sms'));
+        $request = $this->createWhatsappVerificationRequest([
+            'hub.mode' => 'subscribe',
+            'hub.verify_token' => '   ',
+            'hub.challenge' => 'challenge-123',
+        ]);
 
         $response = $controller->handle($request, 'whatsapp');
 

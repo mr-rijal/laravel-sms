@@ -41,8 +41,11 @@ class TwilioDriver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
-        if ($message->getText() === null && $message->getTemplateId() === null) {
-            throw new InvalidArgumentException('Message text or template ID is required');
+        $rawText = $message->getText();
+        $body = $rawText !== null ? trim($rawText) : '';
+
+        if ($body === '') {
+            throw new InvalidArgumentException('Twilio SMS requires a non-empty message body; template-only messages are not supported.');
         }
 
         $accountSid = (string) $this->config['sid'];
@@ -55,7 +58,7 @@ class TwilioDriver implements SmsProvider
                         'form_params' => [
                             'From' => (string) $this->config['from'],
                             'To' => $to,
-                            'Body' => $message->getText() ?? '',
+                            'Body' => $body,
                         ],
                     ]
                 );

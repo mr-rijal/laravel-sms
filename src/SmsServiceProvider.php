@@ -27,7 +27,8 @@ class SmsServiceProvider extends ServiceProvider
             __DIR__.'/../config/sms.php' => config_path('sms.php'),
         ], 'sms-config');
 
-        if (config('sms.webhooks.enabled', false) === true) {
+        $webhooksEnabled = config('sms.webhooks.enabled', false);
+        if (filter_var($webhooksEnabled, FILTER_VALIDATE_BOOLEAN)) {
             $this->loadWebhookRoutes();
         }
     }

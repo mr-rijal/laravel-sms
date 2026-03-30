@@ -31,6 +31,8 @@ class Msg91Driver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
+        $message->validate();
+
         $client = $this->client ?? new Client(['timeout' => 30]);
 
         try {
@@ -54,12 +56,14 @@ class Msg91Driver implements SmsProvider
                     throw new RuntimeException('Failed to send SMS via MSG91: '.$response->getBody()->getContents());
                 }
             } else {
+                $text = $message->getText() ?? throw new InvalidArgumentException('Message text is required for plain SMS');
+
                 foreach ($message->getTo() as $to) {
                     $response = $client->post('https://api.msg91.com/api/v2/sendsms', [
                         'form_params' => [
                             'authkey' => (string) $this->config['authkey'],
                             'mobiles' => $to,
-                            'message' => $message->getText() ?? '',
+                            'message' => $text,
                             'sender' => (string) $this->config['sender'],
                             'route' => '4',
                         ],

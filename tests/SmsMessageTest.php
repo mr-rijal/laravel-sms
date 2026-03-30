@@ -153,4 +153,13 @@ class SmsMessageTest extends BaseTestCase
         $message->validate();
         $this->assertTrue(true);
     }
+
+    public function test_get_redacted_recipients_for_logging(): void
+    {
+        $message = (new SmsMessage)->to('9812345678');
+        $this->assertSame(['***5678'], $message->getRedactedRecipientsForLogging());
+
+        $message2 = (new SmsMessage)->to(['+15551234567', '9800000000']);
+        $this->assertSame(['***4567', '***0000'], $message2->getRedactedRecipientsForLogging());
+    }
 }

@@ -43,7 +43,8 @@ class SendSmsJob implements ShouldQueue
         try {
             Log::info('Processing queued SMS', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
                 'attempt' => $this->attempts(),
             ]);
 
@@ -51,7 +52,8 @@ class SendSmsJob implements ShouldQueue
         } catch (Throwable $e) {
             Log::error('SMS job failed', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
             ]);
@@ -64,7 +66,8 @@ class SendSmsJob implements ShouldQueue
     {
         Log::error('SMS job failed after all retries', [
             'provider' => $this->provider,
-            'recipients' => $this->message->getTo(),
+            'recipients' => $this->message->getRedactedRecipientsForLogging(),
+            'template_id' => $this->message->getTemplateId(),
             'error' => $exception->getMessage(),
             'trace' => $exception->getTraceAsString(),
         ]);

@@ -57,13 +57,16 @@ class WhatsAppDriver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
-        if ($message->getText() === null && $message->getTemplateId() === null) {
+        $trimmedText = trim((string) $message->getText());
+        $trimmedTemplateId = trim((string) $message->getTemplateId());
+
+        if ($trimmedText === '' && $trimmedTemplateId === '') {
             throw new InvalidArgumentException('Message text or template ID is required');
         }
 
         foreach ($message->getTo() as $to) {
             try {
-                if ($message->getTemplateId() !== null) {
+                if ($trimmedTemplateId !== '') {
                     $this->sendTemplateMessage($to, $message);
                 } else {
                     $this->sendTextMessage($to, $message);
@@ -87,8 +90,8 @@ class WhatsAppDriver implements SmsProvider
     protected function sendTextMessage(string $to, SmsMessage $message): void
     {
         $phoneNumber = $this->formatPhoneNumber($to);
-        $body = $message->getText();
-        if ($body === null) {
+        $body = trim((string) $message->getText());
+        if ($body === '') {
             throw new InvalidArgumentException('Message text is required for WhatsApp text messages.');
         }
 
@@ -122,8 +125,8 @@ class WhatsAppDriver implements SmsProvider
     protected function sendTemplateMessage(string $to, SmsMessage $message): void
     {
         $phoneNumber = $this->formatPhoneNumber($to);
-        $templateId = $message->getTemplateId();
-        if ($templateId === null) {
+        $templateId = trim((string) $message->getTemplateId());
+        if ($templateId === '') {
             throw new InvalidArgumentException('Template ID is required.');
         }
 
@@ -276,22 +279,35 @@ class WhatsAppDriver implements SmsProvider
         $webhookConfig = config('sms.webhooks.whatsapp', []);
         $verifyToken = '';
         if (is_array($webhookConfig) && isset($webhookConfig['verify_token']) && is_string($webhookConfig['verify_token'])) {
-            $verifyToken = $webhookConfig['verify_token'];
+            $verifyToken = trim($webhookConfig['verify_token']);
         }
 
-        $mode = $request->query('hub.mode');
-        $token = $request->query('hub.verify_token');
-        $challenge = $request->query('hub.challenge');
-
-        if ($mode === 'subscribe' && $token === $verifyToken && $challenge !== null) {
-            Log::info('WhatsApp webhook verified', [
-                'challenge' => $challenge,
+        if ($verifyToken === '') {
+            Log::warning('WhatsApp webhook verification rejected: verify_token is not configured or is empty', [
+                'ip' => $request->ip(),
             ]);
 
-            return response((string) $challenge, 200);
+            return response('Forbidden', 403);
         }
 
-        return response('Forbidden', 403);
+        // Facebook sends hub.mode etc.; PHP converts dots to underscores in parsed query keys.
+        $mode = $request->query('hub_mode');
+        $token = $request->query('hub_verify_token');
+        $challenge = $request->query('hub_challenge');
+
+        if ($mode !== 'subscribe' || $challenge === null || ! is_string($token)) {
+            return response('Forbidden', 403);
+        }
+
+        if (! hash_equals($verifyToken, $token)) {
+            return response('Forbidden', 403);
+        }
+
+        Log::info('WhatsApp webhook verified', [
+            'challenge' => $challenge,
+        ]);
+
+        return response((string) $challenge, 200);
     }
 
     protected function verifyWebhook(Request $request, string $secret): bool

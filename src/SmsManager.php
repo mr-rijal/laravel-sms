@@ -84,8 +84,8 @@ class SmsManager
 
         Log::info('Sending SMS', [
             'provider' => $this->provider,
-            'recipients' => $this->message->getTo(),
-            'has_template' => $this->message->getTemplateId() !== null,
+            'recipients' => $this->message->getRedactedRecipientsForLogging(),
+            'template_id' => $this->message->getTemplateId(),
         ]);
 
         Event::dispatch(new SmsSending($this->message, $this->provider));
@@ -98,14 +98,16 @@ class SmsManager
 
             Log::info('SMS sent successfully', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
             ]);
 
             return $result;
         } catch (Throwable $e) {
             Log::error('SMS sending failed', [
                 'provider' => $this->provider,
-                'recipients' => $this->message->getTo(),
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
                 'error' => $e->getMessage(),
             ]);
 
@@ -131,7 +133,8 @@ class SmsManager
 
         Log::info('SMS queued', [
             'provider' => $provider,
-            'recipients' => $message->getTo(),
+            'recipients' => $message->getRedactedRecipientsForLogging(),
+            'template_id' => $message->getTemplateId(),
         ]);
 
         $this->reset();
@@ -162,7 +165,8 @@ class SmsManager
 
         Log::info('SMS scheduled', [
             'provider' => $provider,
-            'recipients' => $message->getTo(),
+            'recipients' => $message->getRedactedRecipientsForLogging(),
+            'template_id' => $message->getTemplateId(),
             'scheduled_at' => $datetime->format('Y-m-d H:i:s'),
         ]);
 

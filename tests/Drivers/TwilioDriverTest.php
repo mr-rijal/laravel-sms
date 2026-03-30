@@ -68,7 +68,7 @@ class TwilioDriverTest extends TestCase
         $this->assertInstanceOf(TwilioDriver::class, $driver);
     }
 
-    public function test_send_throws_when_no_text_or_template(): void
+    public function test_send_throws_when_no_body_text(): void
     {
         $driver = new TwilioDriver([
             'sid' => 'AC123',
@@ -78,7 +78,22 @@ class TwilioDriverTest extends TestCase
         $message = (new SmsMessage)->to('+15559876543');
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Message text or template ID is required');
+        $this->expectExceptionMessage('Twilio SMS requires a non-empty message body');
+
+        $driver->send($message);
+    }
+
+    public function test_send_throws_when_template_only_without_body_text(): void
+    {
+        $driver = new TwilioDriver([
+            'sid' => 'AC123',
+            'token' => 'secret',
+            'from' => '+15551234567',
+        ]);
+        $message = (new SmsMessage)->to('+15559876543')->template('TP123', ['x' => 'y']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Twilio SMS requires a non-empty message body');
 
         $driver->send($message);
     }

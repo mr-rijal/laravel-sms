@@ -122,6 +122,29 @@ class SmsMessage
     }
 
     /**
+     * Recipient numbers redacted for logging (PII-safe; last 4 digits visible when possible).
+     *
+     * @return list<string>
+     */
+    public function getRedactedRecipientsForLogging(): array
+    {
+        return array_map(fn (string $number): string => self::redactPhoneNumber($number), $this->getTo());
+    }
+
+    /**
+     * Redact a phone number for logs: masks all but the last four digits.
+     */
+    private static function redactPhoneNumber(string $number): string
+    {
+        $digits = preg_replace('/\D/', '', $number);
+        if ($digits === null || $digits === '' || strlen($digits) < 4) {
+            return '***';
+        }
+
+        return '***'.substr($digits, -4);
+    }
+
+    /**
      * Validate message is ready to send.
      *
      * @throws \InvalidArgumentException

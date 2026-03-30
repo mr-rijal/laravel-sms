@@ -31,7 +31,10 @@ class SparrowDriver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
-        if ($message->getText() === null && $message->getTemplateId() === null) {
+        $rawText = $message->getText();
+        $trimmedText = $rawText !== null ? trim($rawText) : '';
+
+        if ($trimmedText === '' && $message->getTemplateId() === null) {
             throw new InvalidArgumentException('Message text or template ID is required');
         }
 
@@ -44,7 +47,7 @@ class SparrowDriver implements SmsProvider
                         'token' => (string) $this->config['token'],
                         'from' => (string) $this->config['from'],
                         'to' => $to,
-                        'text' => $message->getText() ?? '',
+                        'text' => $trimmedText,
                     ],
                 ]);
 

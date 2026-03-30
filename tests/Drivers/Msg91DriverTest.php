@@ -43,6 +43,17 @@ class Msg91DriverTest extends TestCase
         $this->assertInstanceOf(Msg91Driver::class, $driver);
     }
 
+    public function test_send_throws_when_no_text_or_template(): void
+    {
+        $driver = new Msg91Driver(['authkey' => 'key', 'sender' => 'SENDER']);
+        $message = (new SmsMessage)->to('9812345678');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Message text or template ID is required');
+
+        $driver->send($message);
+    }
+
     public function test_send_plain_text_success_with_mock_client(): void
     {
         $mock = new MockHandler([
