@@ -154,7 +154,7 @@ return [
         ],
 
         'africastalking' => [
-            'secret' => env('AFRICASTALKING_WEBHOOK_SECRET'),
+            // Africa's Talking uses User-Agent verification, not HMAC signatures.
         ],
 
         'bulksms' => [

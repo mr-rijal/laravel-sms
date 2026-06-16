@@ -93,7 +93,7 @@ class TermiiDriver implements SmsProvider
         if (is_array($webhookConfig) && ! empty($webhookConfig['secret']) && is_string($webhookConfig['secret'])) {
             $signature = (string) $request->header('X-Termii-Signature', '');
             if (! hash_equals(
-                hash_hmac('sha256', $request->getContent(), $webhookConfig['secret']),
+                hash_hmac('sha512', $request->getContent(), $webhookConfig['secret']),
                 $signature
             )) {
                 Log::warning('Termii webhook verification failed', [

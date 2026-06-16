@@ -96,19 +96,14 @@ class AfricasTalkingDriver implements SmsProvider
 
     public function handleWebhook(Request $request): Response
     {
-        $webhookConfig = config('sms.webhooks.africastalking', []);
-        if (is_array($webhookConfig) && ! empty($webhookConfig['secret']) && is_string($webhookConfig['secret'])) {
-            $signature = (string) $request->header('X-AfricasTalking-Signature', '');
-            if (! hash_equals(
-                hash_hmac('sha256', $request->getContent(), $webhookConfig['secret']),
-                $signature
-            )) {
-                Log::warning("Africa's Talking webhook verification failed", [
-                    'ip' => $request->ip(),
-                ]);
+        $userAgent = (string) $request->header('User-Agent', '');
+        if (stripos($userAgent, 'AfricasTalking') === false) {
+            Log::warning("Africa's Talking webhook verification failed: invalid User-Agent", [
+                'ip' => $request->ip(),
+                'user_agent' => $userAgent,
+            ]);
 
-                return response('Unauthorized', 401);
-            }
+            return response('Unauthorized', 401);
         }
 
         /** @var array<string, mixed> $payload */
