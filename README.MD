@@ -9,11 +9,11 @@
 [![Downloads](https://img.shields.io/packagist/dt/mr-rijal/laravel-sms.svg)](https://packagist.org/packages/mr-rijal/laravel-sms)
 [![Star](https://img.shields.io/packagist/stars/mr-rijal/laravel-sms)](https://github.com/mr-rijal/laravel-sms)
 
-A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG91, Sparrow, AWS SNS, WhatsApp, or your own driver—with one simple API.
+A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG91, Sparrow, AWS SNS, WhatsApp, Sendchamp, Termii, Africa's Talking, BulkSMS, or your own driver—with one simple API.
 
 ## Features
 
-- **Multiple drivers** — Twilio, Vonage (Nexmo), MSG91, Sparrow SMS, AWS SNS, WhatsApp Business API
+- **Multiple drivers** — Twilio, Vonage (Nexmo), MSG91, Sparrow SMS, AWS SNS, WhatsApp Business API, Sendchamp, Termii, Africa's Talking, BulkSMS
 - **Laravel Notifications** — Use the `sms` channel and `SmsNotification` out of the box
 - **Queue & schedule** — `sendLater()` and `sendLaterAt()` for queued and scheduled messages
 - **Templates** — Template IDs and variables for providers that support them (e.g. MSG91, WhatsApp)
@@ -52,6 +52,27 @@ SMS_PROVIDER=twilio
 TWILIO_SID=
 TWILIO_TOKEN=
 TWILIO_FROM=
+
+# Example: Sendchamp
+SENDCHAMP_API_KEY=
+SENDCHAMP_SENDER_NAME=Sendchamp
+SENDCHAMP_ROUTE=dnd
+
+# Example: Termii
+TERMII_API_KEY=
+TERMII_SENDER_ID=
+TERMII_CHANNEL=generic
+
+# Example: Africa's Talking
+AFRICASTALKING_API_KEY=
+AFRICASTALKING_USERNAME=sandbox
+AFRICASTALKING_FROM=
+AFRICASTALKING_SANDBOX=false
+
+# Example: BulkSMS
+BULKSMS_TOKEN_ID=
+BULKSMS_TOKEN_SECRET=
+BULKSMS_FROM=
 ```
 
 ## Configuration
@@ -74,12 +95,17 @@ return [
     'queue'   => env('SMS_QUEUE', false),
 
     'drivers' => [
-        'twilio'  => \MrRijal\LaravelSms\Drivers\TwilioDriver::class,
-        'sparrow' => \MrRijal\LaravelSms\Drivers\SparrowDriver::class,
-        'msg91'   => \MrRijal\LaravelSms\Drivers\Msg91Driver::class,
-        'vonage'  => \MrRijal\LaravelSms\Drivers\VonageDriver::class,
-        'aws_sns' => \MrRijal\LaravelSms\Drivers\AwsSnsDriver::class,
-        'fake'    => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
+        'twilio'         => \MrRijal\LaravelSms\Drivers\TwilioDriver::class,
+        'sparrow'        => \MrRijal\LaravelSms\Drivers\SparrowDriver::class,
+        'msg91'          => \MrRijal\LaravelSms\Drivers\Msg91Driver::class,
+        'vonage'         => \MrRijal\LaravelSms\Drivers\VonageDriver::class,
+        'aws_sns'        => \MrRijal\LaravelSms\Drivers\AwsSnsDriver::class,
+        'whatsapp'       => \MrRijal\LaravelSms\Drivers\WhatsAppDriver::class,
+        'sendchamp'      => \MrRijal\LaravelSms\Drivers\SendchampDriver::class,
+        'termii'         => \MrRijal\LaravelSms\Drivers\TermiiDriver::class,
+        'africastalking' => \MrRijal\LaravelSms\Drivers\AfricasTalkingDriver::class,
+        'bulksms'        => \MrRijal\LaravelSms\Drivers\BulkSmsDriver::class,
+        'fake'           => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
     ],
 
     'providers' => [
@@ -94,6 +120,22 @@ return [
     'random_drivers' => ['twilio', 'msg91'],
 ];
 ```
+
+## Supported Drivers
+
+| Driver | Key | Region | Env Variables |
+|--------|-----|--------|---------------|
+| [Twilio](https://www.twilio.com) | `twilio` | Global | `TWILIO_SID`, `TWILIO_TOKEN`, `TWILIO_FROM` |
+| [Vonage](https://www.vonage.com) (Nexmo) | `vonage` | Global | `VONAGE_KEY`, `VONAGE_SECRET`, `VONAGE_FROM` |
+| [MSG91](https://msg91.com) | `msg91` | India | `MSG91_AUTHKEY`, `MSG91_SENDER` |
+| [Sparrow SMS](https://sparrowsms.com) | `sparrow` | Nepal | `SPARROW_TOKEN`, `SPARROW_FROM` |
+| [AWS SNS](https://aws.amazon.com/sns/) | `aws_sns` | Global | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` |
+| [WhatsApp Business](https://business.whatsapp.com) | `whatsapp` | Global | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` |
+| [Sendchamp](https://sendchamp.com) | `sendchamp` | Nigeria / Africa | `SENDCHAMP_API_KEY`, `SENDCHAMP_SENDER_NAME`, `SENDCHAMP_ROUTE` |
+| [Termii](https://termii.com) | `termii` | Nigeria / Africa | `TERMII_API_KEY`, `TERMII_SENDER_ID`, `TERMII_CHANNEL` |
+| [Africa's Talking](https://africastalking.com) | `africastalking` | Pan-Africa | `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`, `AFRICASTALKING_FROM` |
+| [BulkSMS](https://www.bulksms.com) | `bulksms` | Africa / Global | `BULKSMS_TOKEN_ID`, `BULKSMS_TOKEN_SECRET`, `BULKSMS_FROM` |
+| Fake (testing) | `fake` | — | — |
 
 ## Usage
 

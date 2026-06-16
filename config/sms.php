@@ -19,6 +19,10 @@ return [
         'vonage' => Drivers\VonageDriver::class,
         'whatsapp' => Drivers\WhatsAppDriver::class,
         'aws_sns' => Drivers\AwsSnsDriver::class,
+        'sendchamp' => Drivers\SendchampDriver::class,
+        'termii' => Drivers\TermiiDriver::class,
+        'africastalking' => Drivers\AfricasTalkingDriver::class,
+        'bulksms' => Drivers\BulkSmsDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
 
@@ -68,6 +72,31 @@ return [
             'sms_type' => env('AWS_SNS_SMS_TYPE', 'Transactional'), // Transactional or Promotional
         ],
 
+        'sendchamp' => [
+            'api_key' => env('SENDCHAMP_API_KEY'),
+            'sender_name' => env('SENDCHAMP_SENDER_NAME', 'Sendchamp'),
+            'route' => env('SENDCHAMP_ROUTE', 'dnd'), // dnd, non_dnd, or international
+        ],
+
+        'termii' => [
+            'api_key' => env('TERMII_API_KEY'),
+            'sender_id' => env('TERMII_SENDER_ID'),
+            'channel' => env('TERMII_CHANNEL', 'generic'), // generic, dnd, or whatsapp
+        ],
+
+        'africastalking' => [
+            'api_key' => env('AFRICASTALKING_API_KEY'),
+            'username' => env('AFRICASTALKING_USERNAME'),
+            'from' => env('AFRICASTALKING_FROM', ''),
+            'sandbox' => env('AFRICASTALKING_SANDBOX', false),
+        ],
+
+        'bulksms' => [
+            'token_id' => env('BULKSMS_TOKEN_ID'),
+            'token_secret' => env('BULKSMS_TOKEN_SECRET'),
+            'from' => env('BULKSMS_FROM', ''),
+        ],
+
         'fake' => [],
     ],
 
@@ -114,6 +143,22 @@ return [
 
         'sparrow' => [
             'secret' => env('SPARROW_WEBHOOK_SECRET'),
+        ],
+
+        'sendchamp' => [
+            'secret' => env('SENDCHAMP_WEBHOOK_SECRET'),
+        ],
+
+        'termii' => [
+            'secret' => env('TERMII_WEBHOOK_SECRET'),
+        ],
+
+        'africastalking' => [
+            // Africa's Talking uses User-Agent verification, not HMAC signatures.
+        ],
+
+        'bulksms' => [
+            'secret' => env('BULKSMS_WEBHOOK_SECRET'),
         ],
     ],
 ];
