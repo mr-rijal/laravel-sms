@@ -23,6 +23,9 @@ return [
         'plivo' => Drivers\PlivoDriver::class,
         'infobip' => Drivers\InfobipDriver::class,
         'log' => Drivers\LogDriver::class,
+        'telegram_mirror' => Drivers\TelegramMirrorDriver::class,
+        'discord_webhook' => Drivers\DiscordWebhookDriver::class,
+        'slack_webhook' => Drivers\SlackWebhookDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
 
@@ -92,6 +95,19 @@ return [
         ],
 
         'log' => [],
+
+        'telegram_mirror' => [
+            'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+            'chat_id' => env('TELEGRAM_CHAT_ID'),
+        ],
+
+        'discord_webhook' => [
+            'webhook_url' => env('DISCORD_WEBHOOK_URL'),
+        ],
+
+        'slack_webhook' => [
+            'webhook_url' => env('SLACK_WEBHOOK_URL'),
+        ],
 
         'fake' => [],
     ],

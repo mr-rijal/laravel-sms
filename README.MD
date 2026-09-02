@@ -22,6 +22,7 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 - **Random driver** — Load balancing across multiple providers via `random_drivers`
 - **Fake driver** — Test without hitting real APIs
 - **Log driver** — Inspect outbound SMS payloads locally without sending them
+- **Mirror drivers** — Send redacted SMS copies to Telegram, Discord, or Slack for development and operations
 - **Custom drivers** — Implement `SmsProvider` and register your own gateway
 
 ## Requirements
@@ -183,6 +184,25 @@ Sms::provider('log')->to('+15551234567')->message('Debug message')->send();
 ```
 
 Do not use this driver in production: message content and template variables can contain sensitive data.
+
+### Mirror drivers
+
+Telegram, Discord, and Slack mirror drivers send a copy of an outgoing SMS to one configured developer or operations channel. They do not deliver to the SMS recipient and should never be used as the primary customer-notification channel.
+
+```env
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+DISCORD_WEBHOOK_URL=
+SLACK_WEBHOOK_URL=
+```
+
+```php
+Sms::provider('telegram_mirror')->to('+15551234567')->message('Debug message')->send();
+Sms::provider('discord_webhook')->to('+15551234567')->message('Debug message')->send();
+Sms::provider('slack_webhook')->to('+15551234567')->message('Debug message')->send();
+```
+
+Webhook URLs and bot tokens are secrets. Keep them in environment variables and restrict mirror drivers to trusted internal recipients.
 
 ### Queued and scheduled sending
 
