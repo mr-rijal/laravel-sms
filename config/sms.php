@@ -92,7 +92,8 @@ return [
         |--------------------------------------------------------------------------
         |
         | Configure webhook secrets for each provider to verify incoming
-        | webhook requests. Leave empty to disable verification.
+        | webhook requests. A configured webhook rejects requests when its
+        | secret is empty or invalid.
         |
         */
         'twilio' => [

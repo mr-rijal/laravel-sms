@@ -69,7 +69,6 @@ class SendSmsJob implements ShouldQueue
             'recipients' => $this->message->getRedactedRecipientsForLogging(),
             'template_id' => $this->message->getTemplateId(),
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString(),
         ]);
     }
 }

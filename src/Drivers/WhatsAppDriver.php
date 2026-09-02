@@ -195,7 +195,7 @@ class WhatsAppDriver implements SmsProvider
             }
         }
 
-        if (! preg_match('/\d/', $normalized) || $normalized === '+' || $normalized === '') {
+        if (! preg_match('/\d/', $normalized) || $normalized === '+') {
             throw new RuntimeException('Invalid phone number.');
         }
 
@@ -255,14 +255,16 @@ class WhatsAppDriver implements SmsProvider
         }
 
         $webhookConfig = config('sms.webhooks.whatsapp', []);
-        if (is_array($webhookConfig) && ! empty($webhookConfig['secret']) && is_string($webhookConfig['secret'])) {
-            if (! $this->verifyWebhook($request, $webhookConfig['secret'])) {
-                Log::warning('WhatsApp webhook verification failed', [
-                    'ip' => $request->ip(),
-                ]);
+        $secret = is_array($webhookConfig) && isset($webhookConfig['secret']) && is_string($webhookConfig['secret'])
+            ? trim($webhookConfig['secret'])
+            : '';
 
-                return response('Unauthorized', 401);
-            }
+        if ($secret === '' || ! $this->verifyWebhook($request, $secret)) {
+            Log::warning('WhatsApp webhook verification failed', [
+                'ip' => $request->ip(),
+            ]);
+
+            return response('Unauthorized', 401);
         }
 
         /** @var array<string, mixed> $payload */

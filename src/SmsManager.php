@@ -80,40 +80,42 @@ class SmsManager
      */
     public function sendNow(): bool
     {
-        $this->message->validate();
-
-        Log::info('Sending SMS', [
-            'provider' => $this->provider,
-            'recipients' => $this->message->getRedactedRecipientsForLogging(),
-            'template_id' => $this->message->getTemplateId(),
-        ]);
-
-        Event::dispatch(new SmsSending($this->message, $this->provider));
-
         try {
-            $driver = $this->resolveDriver();
-            $result = $driver->send($this->message);
+            $this->message->validate();
 
-            Event::dispatch(new SmsSent($this->message, $this->provider, true));
-
-            Log::info('SMS sent successfully', [
+            Log::info('Sending SMS', [
                 'provider' => $this->provider,
                 'recipients' => $this->message->getRedactedRecipientsForLogging(),
                 'template_id' => $this->message->getTemplateId(),
             ]);
 
-            return $result;
-        } catch (Throwable $e) {
-            Log::error('SMS sending failed', [
-                'provider' => $this->provider,
-                'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                'template_id' => $this->message->getTemplateId(),
-                'error' => $e->getMessage(),
-            ]);
+            Event::dispatch(new SmsSending($this->message, $this->provider));
 
-            Event::dispatch(new SmsSent($this->message, $this->provider, false, $e->getMessage()));
+            try {
+                $driver = $this->resolveDriver();
+                $result = $driver->send($this->message);
 
-            throw $e;
+                Event::dispatch(new SmsSent($this->message, $this->provider, true));
+
+                Log::info('SMS sent successfully', [
+                    'provider' => $this->provider,
+                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                    'template_id' => $this->message->getTemplateId(),
+                ]);
+
+                return $result;
+            } catch (Throwable $e) {
+                Log::error('SMS sending failed', [
+                    'provider' => $this->provider,
+                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                    'template_id' => $this->message->getTemplateId(),
+                    'error' => $e->getMessage(),
+                ]);
+
+                Event::dispatch(new SmsSent($this->message, $this->provider, false, $e->getMessage()));
+
+                throw $e;
+            }
         } finally {
             $this->reset();
         }
@@ -124,20 +126,22 @@ class SmsManager
      */
     public function sendLater(): void
     {
-        $this->message->validate();
+        try {
+            $this->message->validate();
 
-        $message = clone $this->message;
-        $provider = $this->provider;
+            $message = clone $this->message;
+            $provider = $this->provider;
 
-        dispatch(new SendSmsJob($message, $provider));
+            dispatch(new SendSmsJob($message, $provider));
 
-        Log::info('SMS queued', [
-            'provider' => $provider,
-            'recipients' => $message->getRedactedRecipientsForLogging(),
-            'template_id' => $message->getTemplateId(),
-        ]);
-
-        $this->reset();
+            Log::info('SMS queued', [
+                'provider' => $provider,
+                'recipients' => $message->getRedactedRecipientsForLogging(),
+                'template_id' => $message->getTemplateId(),
+            ]);
+        } finally {
+            $this->reset();
+        }
     }
 
     /**
@@ -156,21 +160,23 @@ class SmsManager
      */
     public function sendLaterAt(DateTimeInterface $datetime): void
     {
-        $this->message->validate();
+        try {
+            $this->message->validate();
 
-        $message = clone $this->message;
-        $provider = $this->provider;
+            $message = clone $this->message;
+            $provider = $this->provider;
 
-        dispatch(new SendSmsJob($message, $provider))->delay($datetime);
+            dispatch(new SendSmsJob($message, $provider))->delay($datetime);
 
-        Log::info('SMS scheduled', [
-            'provider' => $provider,
-            'recipients' => $message->getRedactedRecipientsForLogging(),
-            'template_id' => $message->getTemplateId(),
-            'scheduled_at' => $datetime->format('Y-m-d H:i:s'),
-        ]);
-
-        $this->reset();
+            Log::info('SMS scheduled', [
+                'provider' => $provider,
+                'recipients' => $message->getRedactedRecipientsForLogging(),
+                'template_id' => $message->getTemplateId(),
+                'scheduled_at' => $datetime->format('Y-m-d H:i:s'),
+            ]);
+        } finally {
+            $this->reset();
+        }
     }
 
     /**
