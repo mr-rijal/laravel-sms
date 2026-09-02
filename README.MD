@@ -13,7 +13,7 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 
 ## Features
 
-- **Multiple drivers** — Twilio, Vonage (Nexmo), MSG91, Sparrow SMS, AWS SNS, WhatsApp Business API
+- **Multiple drivers** — Twilio, Vonage (Nexmo), MSG91, Sparrow SMS, AWS SNS, WhatsApp Business API, Telnyx, Plivo, and Infobip
 - **Laravel Notifications** — Use the `sms` channel and `SmsNotification` out of the box
 - **Queue & schedule** — `sendLater()` and `sendLaterAt()` for queued and scheduled messages
 - **Templates** — Template IDs and variables for providers that support them (e.g. MSG91, WhatsApp)
@@ -21,6 +21,7 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 - **Macros** — Extend the facade with custom methods (e.g. `sendOtp()`)
 - **Random driver** — Load balancing across multiple providers via `random_drivers`
 - **Fake driver** — Test without hitting real APIs
+- **Log driver** — Inspect outbound SMS payloads locally without sending them
 - **Custom drivers** — Implement `SmsProvider` and register your own gateway
 
 ## Requirements
@@ -82,8 +83,11 @@ return [
         'sparrow' => \MrRijal\LaravelSms\Drivers\SparrowDriver::class,
         'msg91'   => \MrRijal\LaravelSms\Drivers\Msg91Driver::class,
         'vonage'  => \MrRijal\LaravelSms\Drivers\VonageDriver::class,
-        'aws_sns' => \MrRijal\LaravelSms\Drivers\AwsSnsDriver::class,
-        'fake'    => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
+    'aws_sns' => \MrRijal\LaravelSms\Drivers\AwsSnsDriver::class,
+    'telnyx'  => \MrRijal\LaravelSms\Drivers\TelnyxDriver::class,
+    'plivo'   => \MrRijal\LaravelSms\Drivers\PlivoDriver::class,
+    'infobip' => \MrRijal\LaravelSms\Drivers\InfobipDriver::class,
+    'fake'    => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
     ],
 
     'providers' => [
@@ -145,6 +149,40 @@ Sms::to('9812345678')
 ```
 
 `template()` takes a template ID and an array of variables. Supported where the driver implements it (e.g. MSG91, WhatsApp).
+
+### Telnyx, Plivo, and Infobip
+
+Configure the provider credentials in your environment, then select the driver in the usual way:
+
+```env
+TELNYX_API_KEY=
+TELNYX_FROM=
+
+PLIVO_AUTH_ID=
+PLIVO_AUTH_TOKEN=
+PLIVO_FROM=
+
+INFOBIP_API_KEY=
+INFOBIP_SENDER=
+```
+
+```php
+Sms::provider('telnyx')->to('+15551234567')->message('Hello')->send();
+Sms::provider('plivo')->to('+15551234567')->message('Hello')->send();
+Sms::provider('infobip')->to('+15551234567')->message('Hello')->send();
+```
+
+Telnyx can use `TELNYX_MESSAGING_PROFILE_ID` instead of `TELNYX_FROM`. Plivo disables provider-side content and recipient logging by default; set `PLIVO_LOG_MESSAGES=true` only when that retention is necessary.
+
+### Log driver
+
+Use the `log` driver during local development to validate an SMS request and write its message text, template data, and redacted recipients to Laravel's debug log without sending it:
+
+```php
+Sms::provider('log')->to('+15551234567')->message('Debug message')->send();
+```
+
+Do not use this driver in production: message content and template variables can contain sensitive data.
 
 ### Queued and scheduled sending
 
