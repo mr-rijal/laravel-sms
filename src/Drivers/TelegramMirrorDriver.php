@@ -53,7 +53,7 @@ class TelegramMirrorDriver implements SmsProvider
                 throw new RuntimeException("Failed to mirror SMS to Telegram (HTTP {$response->getStatusCode()}).");
             }
         } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to mirror SMS to Telegram.', 0, $e);
+            throw new RuntimeException('Failed to mirror SMS to Telegram.');
         }
 
         return true;

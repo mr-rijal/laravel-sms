@@ -35,14 +35,17 @@ class DiscordWebhookDriver implements SmsProvider
 
         try {
             $response = $this->client->post((string) $this->config['webhook_url'], [
-                'json' => ['content' => $this->formatMessage($message)],
+                'json' => [
+                    'content' => $this->formatMessage($message),
+                    'allowed_mentions' => ['parse' => []],
+                ],
             ]);
 
             if (! in_array($response->getStatusCode(), [200, 204], true)) {
                 throw new RuntimeException("Failed to mirror SMS to Discord (HTTP {$response->getStatusCode()}).");
             }
         } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to mirror SMS to Discord.', 0, $e);
+            throw new RuntimeException('Failed to mirror SMS to Discord.');
         }
 
         return true;

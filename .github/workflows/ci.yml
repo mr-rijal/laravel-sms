@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -76,6 +80,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -93,7 +99,9 @@ jobs:
 
       - name: Allow legacy Laravel 11 resolution for compatibility tests
         if: matrix.laravel == '11.*'
-        run: composer config audit.block-insecure false
+        run: >
+          composer config --json policy.advisories.ignore
+          '{"laravel/framework":{"constraint":"^11.0","on-audit":false,"reason":"Laravel 11 is tested for functional compatibility only; its advisories remain visible to audit."}}'
 
       - name: Install dependencies
         run: |
@@ -108,6 +116,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

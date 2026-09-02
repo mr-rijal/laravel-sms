@@ -29,7 +29,7 @@ A unified, extensible SMS gateway for Laravel. Send SMS via Twilio, Vonage, MSG9
 
 - PHP 8.2 or higher on Laravel 11–12; Laravel 13 requires PHP 8.3 or higher (upstream constraint)
 - Laravel 11.x and above
-- Guzzle HTTP 7.15.5 or higher (required by drivers that call APIs)
+- Guzzle HTTP 7.15.5 or later in the 7.x series (required by drivers that call APIs)
 
 > WhatsApp webhooks are accepted only when `WHATSAPP_WEBHOOK_SECRET` is configured and the request carries a valid `X-Hub-Signature-256` signature. Keep webhooks disabled unless they are needed.
 

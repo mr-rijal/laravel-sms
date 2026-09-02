@@ -42,7 +42,7 @@ class SlackWebhookDriver implements SmsProvider
                 throw new RuntimeException("Failed to mirror SMS to Slack (HTTP {$response->getStatusCode()}).");
             }
         } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to mirror SMS to Slack.', 0, $e);
+            throw new RuntimeException('Failed to mirror SMS to Slack.');
         }
 
         return true;
