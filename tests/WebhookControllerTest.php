@@ -114,4 +114,39 @@ class WebhookControllerTest extends TestCase
 
         $this->assertSame(403, $response->getStatusCode());
     }
+
+    public function test_whatsapp_post_webhook_rejects_requests_when_no_app_secret_is_configured(): void
+    {
+        $this->app['config']->set('sms.webhooks.whatsapp.secret', '');
+
+        $controller = new WebhookController($this->app->make('laravel-sms'));
+        $request = Request::create('/laravel-sms/webhook/whatsapp', 'POST', ['entry' => []]);
+
+        $response = $controller->handle($request, 'whatsapp');
+
+        $this->assertSame(401, $response->getStatusCode());
+    }
+
+    public function test_whatsapp_post_webhook_accepts_a_valid_app_secret_signature(): void
+    {
+        $secret = 'webhook-app-secret';
+        $payload = '{"entry":[]}';
+        $signature = 'sha256='.hash_hmac('sha256', $payload, $secret);
+        $this->app['config']->set('sms.webhooks.whatsapp.secret', $secret);
+
+        $controller = new WebhookController($this->app->make('laravel-sms'));
+        $request = Request::create(
+            '/laravel-sms/webhook/whatsapp',
+            'POST',
+            [],
+            [],
+            [],
+            ['HTTP_X_HUB_SIGNATURE_256' => $signature, 'CONTENT_TYPE' => 'application/json'],
+            $payload,
+        );
+
+        $response = $controller->handle($request, 'whatsapp');
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
 }
