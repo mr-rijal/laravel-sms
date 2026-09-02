@@ -6,6 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use MrRijal\LaravelSms\Drivers\SlackWebhookDriver;
@@ -23,10 +24,18 @@ class SlackWebhookDriverTest extends TestCase
 
     public function test_mirrors_a_message(): void
     {
-        $client = new Client(['handler' => HandlerStack::create(new MockHandler([new Response(200, [], 'ok')]))]);
+        $history = [];
+        $stack = HandlerStack::create(new MockHandler([new Response(200, [], 'ok')]));
+        $stack->push(Middleware::history($history));
+        $client = new Client(['handler' => $stack]);
         $driver = new SlackWebhookDriver(['webhook_url' => 'https://hooks.slack.com/services/team/channel/token'], $client);
 
-        $this->assertTrue($driver->send((new SmsMessage)->to('+15559876543')->message('Debug message')));
+        $this->assertTrue($driver->send((new SmsMessage)->to('+15559876543')->message('<!here> Debug message')));
+        $payload = json_decode((string) $history[0]['request']->getBody(), true);
+
+        $this->assertSame("*SMS mirror*\nRecipients: ***6543\nMessage: <!here> Debug message", $payload['text']);
+        $this->assertFalse($payload['mrkdwn']);
+        $this->assertFalse($history[0]['options']['allow_redirects']);
     }
 
     public function test_does_not_expose_webhook_credentials_when_the_request_fails(): void

@@ -108,6 +108,10 @@ jobs:
           composer require "illuminate/support:${{ matrix.laravel }}" "illuminate/contracts:${{ matrix.laravel }}" --no-interaction --no-update
           composer update --with-all-dependencies --no-interaction --prefer-dist
 
+      - name: Audit Laravel 11 dependencies
+        if: matrix.laravel == '11.*'
+        run: composer audit
+
       - name: Run PHPUnit
         run: vendor/bin/phpunit --colors=always
 

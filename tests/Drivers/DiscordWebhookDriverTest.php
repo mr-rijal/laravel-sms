@@ -34,6 +34,7 @@ class DiscordWebhookDriverTest extends TestCase
         $payload = json_decode((string) $history[0]['request']->getBody(), true);
 
         $this->assertSame(['parse' => []], $payload['allowed_mentions']);
+        $this->assertFalse($history[0]['options']['allow_redirects']);
     }
 
     public function test_does_not_expose_webhook_credentials_when_the_request_fails(): void

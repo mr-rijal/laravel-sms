@@ -35,7 +35,11 @@ class SlackWebhookDriver implements SmsProvider
 
         try {
             $response = $this->client->post((string) $this->config['webhook_url'], [
-                'json' => ['text' => $this->formatMessage($message)],
+                'allow_redirects' => false,
+                'json' => [
+                    'text' => $this->formatMessage($message),
+                    'mrkdwn' => false,
+                ],
             ]);
 
             if ($response->getStatusCode() !== 200 || trim((string) $response->getBody()) !== 'ok') {

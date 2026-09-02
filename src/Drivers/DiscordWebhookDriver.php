@@ -35,6 +35,7 @@ class DiscordWebhookDriver implements SmsProvider
 
         try {
             $response = $this->client->post((string) $this->config['webhook_url'], [
+                'allow_redirects' => false,
                 'json' => [
                     'content' => $this->formatMessage($message),
                     'allowed_mentions' => ['parse' => []],
