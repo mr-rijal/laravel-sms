@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\RequestException;
 use InvalidArgumentException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
@@ -65,10 +65,7 @@ class TwilioDriver implements SmsProvider
 
                 $this->assertTwilioSuccess($response);
             } catch (GuzzleException $e) {
-                $statusCode = 0;
-                if ($e instanceof RequestException && $e->hasResponse()) {
-                    $statusCode = $e->getResponse()->getStatusCode();
-                }
+                $statusCode = $e instanceof BadResponseException ? $e->getResponse()->getStatusCode() : 0;
                 throw new RuntimeException(
                     "Failed to send SMS via Twilio: {$e->getMessage()}",
                     $statusCode,

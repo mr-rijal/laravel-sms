@@ -2,8 +2,7 @@ includes:
     - vendor/larastan/larastan/extension.neon
 
 parameters:
-    # Raise gradually; level max is enforced locally via phpstan.neon if desired.
-    level: 5
+    level: 8
     paths:
         - src
     excludePaths:

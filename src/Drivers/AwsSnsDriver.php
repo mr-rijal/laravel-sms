@@ -40,13 +40,12 @@ class AwsSnsDriver implements SmsProvider
 
     public function send(SmsMessage $message): bool
     {
-        if ($message->getText() === null && $message->getTemplateId() === null) {
-            throw new InvalidArgumentException('Message text or template ID is required');
-        }
-
         $messageText = $message->getText();
-        if ($messageText === null && $message->getTemplateId() !== null) {
-            throw new InvalidArgumentException('AWS SNS requires message text. Template-based messaging is not directly supported.');
+
+        if ($messageText === null) {
+            throw new InvalidArgumentException($message->getTemplateId() === null
+                ? 'Message text or template ID is required'
+                : 'AWS SNS requires message text. Template-based messaging is not directly supported.');
         }
 
         foreach ($message->getTo() as $to) {

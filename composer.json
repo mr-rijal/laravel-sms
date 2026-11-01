@@ -1,6 +1,20 @@
 {
     "name": "mr-rijal/laravel-sms",
     "description": "Unified, extensible SMS gateway for Laravel",
+    "keywords": [
+        "laravel",
+        "sms",
+        "notifications",
+        "twilio",
+        "vonage",
+        "whatsapp",
+        "aws-sns",
+        "telnyx",
+        "plivo",
+        "infobip",
+        "termii",
+        "africastalking"
+    ],
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -9,18 +23,27 @@
             "email": "prashantrijal.721@gmail.com"
         }
     ],
+    "support": {
+        "issues": "https://github.com/mr-rijal/laravel-sms/issues",
+        "source": "https://github.com/mr-rijal/laravel-sms",
+        "security": "https://github.com/mr-rijal/laravel-sms/blob/main/SECURITY.md"
+    },
     "require": {
         "php": "^8.2",
-        "illuminate/support": "^11.0|^12.0|^13.0",
         "illuminate/contracts": "^11.0|^12.0|^13.0",
-        "guzzlehttp/guzzle": "^7.15.5",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/notifications": "^11.0|^12.0|^13.0",
+        "illuminate/queue": "^11.0|^12.0|^13.0",
+        "illuminate/routing": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "guzzlehttp/guzzle": "^7.15.5|^8.0",
         "aws/aws-sdk-php": "^3.394.6"
     },
     "require-dev": {
-        "orchestra/testbench": "^9|^10|^11",
-        "phpunit/phpunit": "^9|^10|^11|^12|^13",
-        "laravel/pint": "^1",
-        "larastan/larastan": "^2|^3"
+        "orchestra/testbench": "^9.16|^10.12|^11.3",
+        "phpunit/phpunit": "^10.5|^11.5|^12.5|^13.4",
+        "laravel/pint": "^1.24",
+        "larastan/larastan": "^3.13"
     },
     "autoload": {
         "psr-4": {
@@ -60,6 +83,10 @@
                 "Sms": "MrRijal\\LaravelSms\\Facades\\Sms"
             }
         }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
     },
     "minimum-stability": "stable",
     "prefer-stable": true

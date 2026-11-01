@@ -26,14 +26,14 @@ class TelegramMirrorDriverTest extends TestCase
         $client = new Client(['handler' => HandlerStack::create(new MockHandler([
             new Response(200, [], json_encode(['ok' => true, 'result' => ['message_id' => 1]])),
         ]))]);
-        $driver = new TelegramMirrorDriver(['bot_token' => 'token', 'chat_id' => '@developers'], $client);
+        $driver = new TelegramMirrorDriver(['bot_token' => '123456:test-token', 'chat_id' => '@developers'], $client);
 
         $this->assertTrue($driver->send((new SmsMessage)->to('+15559876543')->message('Debug message')));
     }
 
     public function test_does_not_expose_bot_credentials_when_the_request_fails(): void
     {
-        $sentinel = 'telegram-secret-token';
+        $sentinel = '123456:telegram-secret-token';
         $client = new Client(['handler' => HandlerStack::create(new MockHandler([
             new ConnectException('Connection failed', new Request('POST', "https://api.telegram.org/bot{$sentinel}/sendMessage")),
         ]))]);
@@ -46,5 +46,13 @@ class TelegramMirrorDriverTest extends TestCase
             $this->assertStringNotContainsString($sentinel, $exception->getMessage());
             $this->assertNull($exception->getPrevious());
         }
+    }
+
+    public function test_rejects_malformed_bot_token(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('invalid format');
+
+        new TelegramMirrorDriver(['bot_token' => '../../other', 'chat_id' => '@developers']);
     }
 }

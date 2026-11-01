@@ -27,7 +27,7 @@ class PlivoDriver implements SmsProvider
             throw new InvalidArgumentException('Plivo configuration is incomplete. auth_id, auth_token, and from are required.');
         }
 
-        $authId = (string) $config['auth_id'];
+        $authId = rawurlencode((string) $config['auth_id']);
         $this->client = $client ?? new Client([
             'base_uri' => "https://api.plivo.com/v1/Account/{$authId}/",
             'timeout' => 30,
@@ -52,7 +52,7 @@ class PlivoDriver implements SmsProvider
                     'dst' => implode('<', $message->getTo()),
                     'text' => $text,
                     'type' => 'sms',
-                    'log' => $this->config['log'] ?? false,
+                    'log' => filter_var($this->config['log'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ],
             ]);
 

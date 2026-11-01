@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Jobs;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -14,7 +15,10 @@ use MrRijal\LaravelSms\SmsManager;
 use MrRijal\LaravelSms\SmsMessage;
 use Throwable;
 
-class SendSmsJob implements ShouldQueue
+/**
+ * Encrypted on the queue because the payload carries phone numbers and message content.
+ */
+class SendSmsJob implements ShouldBeEncrypted, ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;

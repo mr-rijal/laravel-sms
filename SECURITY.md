@@ -46,7 +46,10 @@ Please allow reasonable time before public disclosure.
 When using this package in production:
 
 - Store provider credentials in environment variables or a secrets manager, not in source control
-- Restrict webhook routes (HTTPS and IP allowlists where appropriate). WhatsApp webhook requests require a valid `X-Hub-Signature-256` signature and a configured `WHATSAPP_WEBHOOK_SECRET`.
+- Serve webhook routes over HTTPS only. Every webhook fails closed: it is rejected unless the provider's `*_WEBHOOK_SECRET` is configured and the request carries a valid signature (WhatsApp, Sendchamp, Termii, BulkSMS) or secret token (Africa's Talking)
+- Keep webhooks disabled (`SMS_WEBHOOKS_ENABLED=false`) unless you need them
+- Queued SMS jobs are encrypted with `APP_KEY`; keep that key secret and rotate it with Laravel's `APP_PREVIOUS_KEYS`
+- Never use the `log` driver or the Telegram/Discord/Slack mirror drivers to deliver to customers; they exist for development and internal operations
 - Limit who can trigger SMS sends in your app (rate limits, auth, auditing)
 - Review logs so message bodies and phone numbers are not exposed unnecessarily
 - Keep `guzzlehttp/guzzle`, `aws/aws-sdk-php`, and Laravel patched

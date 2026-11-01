@@ -19,13 +19,21 @@ class LogDriver implements SmsProvider
     {
         $message->validate();
 
-        Log::debug('SMS captured by log driver', [
+        $context = [
             'provider' => 'log',
             'recipients' => $message->getRedactedRecipientsForLogging(),
             'message' => $message->getText(),
             'template_id' => $message->getTemplateId(),
             'variables' => $message->getVariables(),
-        ]);
+        ];
+
+        $channel = $this->config['channel'] ?? null;
+
+        if (is_string($channel) && $channel !== '') {
+            Log::channel($channel)->debug('SMS captured by log driver', $context);
+        } else {
+            Log::debug('SMS captured by log driver', $context);
+        }
 
         return true;
     }

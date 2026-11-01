@@ -2,6 +2,7 @@
 
 namespace MrRijal\LaravelSms\Tests;
 
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use MrRijal\LaravelSms\Drivers\FakeDriver;
@@ -9,6 +10,8 @@ use MrRijal\LaravelSms\Events\SmsSending;
 use MrRijal\LaravelSms\Events\SmsSent;
 use MrRijal\LaravelSms\Facades\Sms;
 use MrRijal\LaravelSms\Jobs\SendSmsJob;
+use MrRijal\LaravelSms\SmsManager;
+use MrRijal\LaravelSms\SmsMessage;
 
 class SmsManagerTest extends TestCase
 {
@@ -193,5 +196,51 @@ class SmsManagerTest extends TestCase
         $this->expectExceptionMessage('No drivers configured for random selection');
 
         Sms::provider('random')->to('9812345678')->message('Hi')->sendNow();
+    }
+
+    public function test_send_later_uses_configured_queue_connection_and_name(): void
+    {
+        Queue::fake();
+        $this->app['config']->set('sms.queue_connection', 'redis');
+        $this->app['config']->set('sms.queue_name', 'sms');
+
+        Sms::to('9812345678')->message('Queued')->sendLater();
+
+        Queue::assertPushedOn('sms', SendSmsJob::class, function (SendSmsJob $job): bool {
+            return $job->connection === 'redis';
+        });
+    }
+
+    public function test_send_queues_when_queue_config_is_a_truthy_string(): void
+    {
+        Queue::fake();
+        $this->app['config']->set('sms.queue', 'true');
+
+        $this->assertTrue(Sms::to('9812345678')->message('Queued')->send());
+
+        Queue::assertPushed(SendSmsJob::class);
+    }
+
+    public function test_queued_job_payload_is_encrypted(): void
+    {
+        $this->assertInstanceOf(ShouldBeEncrypted::class, new SendSmsJob(
+            (new SmsMessage)->to('9812345678')->message('Secret'),
+            'fake',
+        ));
+    }
+
+    public function test_manager_is_scoped_and_aliased(): void
+    {
+        $this->assertSame($this->app->make(SmsManager::class), $this->app->make('laravel-sms'));
+
+        $first = $this->app->make(SmsManager::class);
+        $this->app->forgetScopedInstances();
+
+        $this->assertNotSame($first, $this->app->make(SmsManager::class));
+    }
+
+    public function test_driver_accessor_resolves_named_driver(): void
+    {
+        $this->assertInstanceOf(FakeDriver::class, Sms::driver('fake'));
     }
 }

@@ -53,7 +53,7 @@ class SmsNotification extends Notification
             $sms->message((string) $this->message);
         }
 
-        if (config('sms.queue', false) === true) {
+        if (filter_var(config('sms.queue', false), FILTER_VALIDATE_BOOLEAN)) {
             $sms->sendLater();
         } else {
             $sms->sendNow();

@@ -5,21 +5,25 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
+use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
 use MrRijal\LaravelSms\SmsMessage;
 use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 
-class WhatsAppDriver implements SmsProvider
+class WhatsAppDriver implements HandlesWebhooks, SmsProvider
 {
+    use VerifiesWebhooks;
+
     protected Client $client;
 
     protected string $apiVersion;
@@ -79,10 +83,7 @@ class WhatsAppDriver implements SmsProvider
                     $this->sendTextMessage($to, $message);
                 }
             } catch (GuzzleException $e) {
-                $statusCode = 0;
-                if ($e instanceof RequestException && $e->hasResponse()) {
-                    $statusCode = $e->getResponse()->getStatusCode();
-                }
+                $statusCode = $e instanceof BadResponseException ? $e->getResponse()->getStatusCode() : 0;
                 throw new RuntimeException(
                     "Failed to send WhatsApp message: {$e->getMessage()}",
                     $statusCode,
@@ -254,15 +255,8 @@ class WhatsAppDriver implements SmsProvider
             return $this->handleVerification($request);
         }
 
-        $webhookConfig = config('sms.webhooks.whatsapp', []);
-        $secret = is_array($webhookConfig) && isset($webhookConfig['secret']) && is_string($webhookConfig['secret'])
-            ? trim($webhookConfig['secret'])
-            : '';
-
-        if ($secret === '' || ! $this->verifyWebhook($request, $secret)) {
-            Log::warning('WhatsApp webhook verification failed', [
-                'ip' => $request->ip(),
-            ]);
+        if (! $this->verifyWebhook($request)) {
+            $this->logRejectedWebhook($request, 'whatsapp');
 
             return response('Unauthorized', 401);
         }
@@ -323,17 +317,12 @@ class WhatsAppDriver implements SmsProvider
         return response($challenge, 200);
     }
 
-    protected function verifyWebhook(Request $request, string $secret): bool
+    /**
+     * Meta signs every webhook with the app secret: X-Hub-Signature-256: sha256=<hmac>.
+     */
+    protected function verifyWebhook(Request $request): bool
     {
-        $signature = $request->header('X-Hub-Signature-256');
-        if ($signature === null || $signature === '') {
-            return false;
-        }
-
-        $payload = $request->getContent();
-        $computed = 'sha256='.hash_hmac('sha256', $payload, $secret);
-
-        return hash_equals($signature, $computed);
+        return $this->hasValidHmacSignature($request, 'whatsapp', 'X-Hub-Signature-256', 'sha256', 'sha256=');
     }
 
     /**

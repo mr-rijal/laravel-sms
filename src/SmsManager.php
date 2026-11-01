@@ -132,7 +132,7 @@ class SmsManager
             $message = clone $this->message;
             $provider = $this->provider;
 
-            dispatch(new SendSmsJob($message, $provider));
+            dispatch($this->makeJob($message, $provider));
 
             Log::info('SMS queued', [
                 'provider' => $provider,
@@ -166,7 +166,7 @@ class SmsManager
             $message = clone $this->message;
             $provider = $this->provider;
 
-            dispatch(new SendSmsJob($message, $provider))->delay($datetime);
+            dispatch($this->makeJob($message, $provider))->delay($datetime);
 
             Log::info('SMS scheduled', [
                 'provider' => $provider,
@@ -185,15 +185,30 @@ class SmsManager
      */
     public function send(): bool
     {
-        $queue = config('sms.queue', false);
-
-        if ($queue === true) {
+        if (filter_var(config('sms.queue', false), FILTER_VALIDATE_BOOLEAN)) {
             $this->sendLater();
 
             return true;
         }
 
         return $this->sendNow();
+    }
+
+    protected function makeJob(SmsMessage $message, string $provider): SendSmsJob
+    {
+        $job = new SendSmsJob($message, $provider);
+
+        $connection = config('sms.queue_connection');
+        if (is_string($connection) && $connection !== '') {
+            $job->onConnection($connection);
+        }
+
+        $queue = config('sms.queue_name');
+        if (is_string($queue) && $queue !== '') {
+            $job->onQueue($queue);
+        }
+
+        return $job;
     }
 
     /**
@@ -260,11 +275,21 @@ class SmsManager
     }
 
     /**
+     * Resolve a configured driver instance by name (defaults to the current provider).
+     *
      * @throws InvalidArgumentException
      */
-    protected function resolveDriver(): SmsProvider
+    public function driver(?string $name = null): SmsProvider
     {
-        $actualProvider = $this->pickDriver();
+        return $this->resolveDriver($name);
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    protected function resolveDriver(?string $name = null): SmsProvider
+    {
+        $actualProvider = $name ?? $this->pickDriver();
 
         if (isset($this->driverCache[$actualProvider])) {
             return $this->driverCache[$actualProvider];

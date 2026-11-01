@@ -27,6 +27,10 @@ class TelegramMirrorDriver implements SmsProvider
             throw new InvalidArgumentException('Telegram mirror configuration is incomplete. bot_token and chat_id are required.');
         }
 
+        if (! preg_match('/^\d+:[A-Za-z0-9_-]+$/', (string) $config['bot_token'])) {
+            throw new InvalidArgumentException('Telegram bot_token has an invalid format.');
+        }
+
         $this->client = $client ?? new Client([
             'base_uri' => 'https://api.telegram.org/bot'.(string) $config['bot_token'].'/',
             'timeout' => 30,
