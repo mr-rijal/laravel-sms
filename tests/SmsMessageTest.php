@@ -162,4 +162,14 @@ class SmsMessageTest extends BaseTestCase
         $message2 = (new SmsMessage)->to(['+15551234567', '9800000000']);
         $this->assertSame(['***4567', '***0000'], $message2->getRedactedRecipientsForLogging());
     }
+
+    public function test_for_recipient_returns_single_recipient_copy(): void
+    {
+        $message = (new SmsMessage)->to(['9812345678', '9800000000'])->message('Hi');
+        $copy = $message->forRecipient('9800000000');
+
+        $this->assertSame(['9800000000'], $copy->getTo());
+        $this->assertSame('Hi', $copy->getText());
+        $this->assertSame(['9812345678', '9800000000'], $message->getTo());
+    }
 }

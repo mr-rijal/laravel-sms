@@ -263,7 +263,7 @@ Webhook URLs and bot tokens are secrets. Keep them in environment variables and 
 
 ### Queued and scheduled sending
 
-Queued jobs implement `ShouldBeEncrypted`, so phone numbers and message text are encrypted with your `APP_KEY` while on the queue. Set `SMS_QUEUE_CONNECTION` / `SMS_QUEUE_NAME` to route them.
+Messages with several recipients are queued as one job per recipient, so a retry after a failure resends only to the recipient that failed. Queued jobs implement `ShouldBeEncrypted`, so phone numbers and message text are encrypted with your `APP_KEY` while on the queue. Set `SMS_QUEUE_CONNECTION` / `SMS_QUEUE_NAME` to route them.
 
 ```php
 // Queue and send when the worker runs

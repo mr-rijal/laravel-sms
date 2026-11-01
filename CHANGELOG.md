@@ -21,6 +21,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Breaking:** Africa's Talking webhooks are authenticated with a `?token=` shared secret instead of the spoofable `User-Agent` header.
 - **Breaking:** webhook routes use the stateless `api` middleware group plus `throttle:120,1` instead of `web` (which applied CSRF to provider callbacks).
 - Queued `SendSmsJob` payloads are encrypted (`ShouldBeEncrypted`).
+- `sendLater()` / `sendLaterAt()` queue one job per recipient, so queue retries no longer resend to recipients that already succeeded.
+- Infobip and Plivo failures include the provider's error text, cut to 200 characters.
 - `SmsManager` is registered as a scoped binding (Octane and queue-worker safe); the `sms` notification channel is registered lazily.
 - New drivers send credentials per request and no longer embed raw upstream response bodies in exception messages.
 - Sendchamp `route` and Termii `channel` are validated; Termii accepts an HTTPS `base_url`.

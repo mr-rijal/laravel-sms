@@ -243,4 +243,32 @@ class SmsManagerTest extends TestCase
     {
         $this->assertInstanceOf(FakeDriver::class, Sms::driver('fake'));
     }
+
+    public function test_send_later_queues_one_job_per_recipient(): void
+    {
+        Queue::fake();
+
+        Sms::provider('fake')->to(['9812345678', '9800000000'])->template('OTP', ['otp' => 1])->sendLater();
+
+        Queue::assertPushed(SendSmsJob::class, 2);
+        $this->assertSame(
+            [['9812345678'], ['9800000000']],
+            array_map(fn (SendSmsJob $job): array => $job->message->getTo(), Queue::pushed(SendSmsJob::class)->all()),
+        );
+        Queue::assertPushed(SendSmsJob::class, fn (SendSmsJob $job): bool => $job->message->getTemplateId() === 'OTP'
+            && $job->message->getVariables() === ['otp' => 1]);
+    }
+
+    public function test_send_later_at_delays_every_per_recipient_job(): void
+    {
+        Queue::fake();
+        $datetime = new \DateTimeImmutable('+10 minutes');
+
+        Sms::to(['9812345678', '9800000000'])->message('Scheduled')->sendLaterAt($datetime);
+
+        Queue::assertPushed(SendSmsJob::class, 2);
+        foreach (Queue::pushed(SendSmsJob::class) as $job) {
+            $this->assertEquals($datetime->getTimestamp(), $job->delay->getTimestamp());
+        }
+    }
 }

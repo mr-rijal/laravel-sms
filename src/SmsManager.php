@@ -122,26 +122,13 @@ class SmsManager
     }
 
     /**
+     * Queue the message as one job per recipient, so a retry only resends to the recipient that failed.
+     *
      * @throws InvalidArgumentException
      */
     public function sendLater(): void
     {
-        try {
-            $this->message->validate();
-
-            $message = clone $this->message;
-            $provider = $this->provider;
-
-            dispatch($this->makeJob($message, $provider));
-
-            Log::info('SMS queued', [
-                'provider' => $provider,
-                'recipients' => $message->getRedactedRecipientsForLogging(),
-                'template_id' => $message->getTemplateId(),
-            ]);
-        } finally {
-            $this->reset();
-        }
+        $this->queue();
     }
 
     /**
@@ -156,24 +143,37 @@ class SmsManager
     }
 
     /**
+     * Schedule the message as one job per recipient (see sendLater()).
+     *
      * @throws InvalidArgumentException
      */
     public function sendLaterAt(DateTimeInterface $datetime): void
     {
+        $this->queue($datetime);
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    protected function queue(?DateTimeInterface $delay = null): void
+    {
         try {
             $this->message->validate();
 
-            $message = clone $this->message;
-            $provider = $this->provider;
+            foreach ($this->message->getTo() as $recipient) {
+                $pending = dispatch($this->makeJob($this->message->forRecipient($recipient), $this->provider));
 
-            dispatch($this->makeJob($message, $provider))->delay($datetime);
+                if ($delay !== null) {
+                    $pending->delay($delay);
+                }
+            }
 
-            Log::info('SMS scheduled', [
-                'provider' => $provider,
-                'recipients' => $message->getRedactedRecipientsForLogging(),
-                'template_id' => $message->getTemplateId(),
-                'scheduled_at' => $datetime->format('Y-m-d H:i:s'),
-            ]);
+            Log::info($delay === null ? 'SMS queued' : 'SMS scheduled', array_filter([
+                'provider' => $this->provider,
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
+                'scheduled_at' => $delay?->format('Y-m-d H:i:s'),
+            ], fn (mixed $value): bool => $value !== null));
         } finally {
             $this->reset();
         }
