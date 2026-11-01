@@ -5,21 +5,25 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
+use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
 use MrRijal\LaravelSms\SmsMessage;
 use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 
-class WhatsAppDriver implements SmsProvider
+class WhatsAppDriver implements HandlesWebhooks, SmsProvider
 {
+    use VerifiesWebhooks;
+
     protected Client $client;
 
     protected string $apiVersion;
@@ -42,8 +46,15 @@ class WhatsAppDriver implements SmsProvider
             throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
         }
 
-        $this->phoneNumberId = (string) $config['phone_number_id'];
-        $this->accessToken = (string) $config['access_token'];
+        $trimmedPhoneNumberId = trim((string) $config['phone_number_id']);
+        $trimmedAccessToken = trim((string) $config['access_token']);
+
+        if ($trimmedPhoneNumberId === '' || $trimmedAccessToken === '') {
+            throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
+        }
+
+        $this->phoneNumberId = $trimmedPhoneNumberId;
+        $this->accessToken = $trimmedAccessToken;
         $this->apiVersion = isset($config['api_version']) && is_string($config['api_version']) ? $config['api_version'] : 'v21.0';
         $this->businessAccountId = isset($config['business_account_id']) && is_string($config['business_account_id'])
             ? $config['business_account_id']
@@ -72,10 +83,7 @@ class WhatsAppDriver implements SmsProvider
                     $this->sendTextMessage($to, $message);
                 }
             } catch (GuzzleException $e) {
-                $statusCode = 0;
-                if ($e instanceof RequestException && $e->hasResponse()) {
-                    $statusCode = $e->getResponse()->getStatusCode();
-                }
+                $statusCode = $e instanceof BadResponseException ? $e->getResponse()->getStatusCode() : 0;
                 throw new RuntimeException(
                     "Failed to send WhatsApp message: {$e->getMessage()}",
                     $statusCode,
@@ -188,6 +196,10 @@ class WhatsAppDriver implements SmsProvider
             }
         }
 
+        if (! preg_match('/\d/', $normalized) || $normalized === '+') {
+            throw new RuntimeException('Invalid phone number.');
+        }
+
         return $normalized;
     }
 
@@ -243,15 +255,10 @@ class WhatsAppDriver implements SmsProvider
             return $this->handleVerification($request);
         }
 
-        $webhookConfig = config('sms.webhooks.whatsapp', []);
-        if (is_array($webhookConfig) && ! empty($webhookConfig['secret']) && is_string($webhookConfig['secret'])) {
-            if (! $this->verifyWebhook($request, $webhookConfig['secret'])) {
-                Log::warning('WhatsApp webhook verification failed', [
-                    'ip' => $request->ip(),
-                ]);
+        if (! $this->verifyWebhook($request)) {
+            $this->logRejectedWebhook($request, 'whatsapp');
 
-                return response('Unauthorized', 401);
-            }
+            return response('Unauthorized', 401);
         }
 
         /** @var array<string, mixed> $payload */
@@ -295,7 +302,7 @@ class WhatsAppDriver implements SmsProvider
         $token = $request->query('hub_verify_token');
         $challenge = $request->query('hub_challenge');
 
-        if ($mode !== 'subscribe' || $challenge === null || ! is_string($token)) {
+        if ($mode !== 'subscribe' || ! is_string($challenge) || ! is_string($token)) {
             return response('Forbidden', 403);
         }
 
@@ -307,20 +314,15 @@ class WhatsAppDriver implements SmsProvider
             'challenge' => $challenge,
         ]);
 
-        return response((string) $challenge, 200);
+        return response($challenge, 200);
     }
 
-    protected function verifyWebhook(Request $request, string $secret): bool
+    /**
+     * Meta signs every webhook with the app secret: X-Hub-Signature-256: sha256=<hmac>.
+     */
+    protected function verifyWebhook(Request $request): bool
     {
-        $signature = $request->header('X-Hub-Signature-256');
-        if ($signature === null || $signature === '') {
-            return false;
-        }
-
-        $payload = $request->getContent();
-        $computed = 'sha256='.hash_hmac('sha256', $payload, $secret);
-
-        return hash_equals($signature, $computed);
+        return $this->hasValidHmacSignature($request, 'whatsapp', 'X-Hub-Signature-256', 'sha256', 'sha256=');
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\ServiceProvider;
 use MrRijal\LaravelSms\Notifications\SmsChannel;
@@ -14,21 +15,25 @@ class SmsServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sms.php', 'sms');
 
-        $this->app->singleton('laravel-sms', fn (): SmsManager => new SmsManager);
+        // Scoped: the fluent builder holds per-message state, so Octane requests
+        // and queue jobs each get a fresh manager instead of a shared singleton.
+        $this->app->scoped(SmsManager::class, fn (): SmsManager => new SmsManager);
+        $this->app->alias(SmsManager::class, 'laravel-sms');
 
-        $this->app->make(ChannelManager::class)->extend('sms', function (): SmsChannel {
-            return new SmsChannel;
+        $this->callAfterResolving(ChannelManager::class, function (ChannelManager $channels): void {
+            $channels->extend('sms', fn (Application $app): SmsChannel => $app->make(SmsChannel::class));
         });
     }
 
     public function boot(): void
     {
-        $this->publishes([
-            __DIR__.'/../config/sms.php' => config_path('sms.php'),
-        ], 'sms-config');
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/sms.php' => config_path('sms.php'),
+            ], 'sms-config');
+        }
 
-        $webhooksEnabled = config('sms.webhooks.enabled', false);
-        if (filter_var($webhooksEnabled, FILTER_VALIDATE_BOOLEAN)) {
+        if (filter_var(config('sms.webhooks.enabled', false), FILTER_VALIDATE_BOOLEAN)) {
             $this->loadWebhookRoutes();
         }
     }

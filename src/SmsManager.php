@@ -80,64 +80,55 @@ class SmsManager
      */
     public function sendNow(): bool
     {
-        $this->message->validate();
-
-        Log::info('Sending SMS', [
-            'provider' => $this->provider,
-            'recipients' => $this->message->getRedactedRecipientsForLogging(),
-            'template_id' => $this->message->getTemplateId(),
-        ]);
-
-        Event::dispatch(new SmsSending($this->message, $this->provider));
-
         try {
-            $driver = $this->resolveDriver();
-            $result = $driver->send($this->message);
+            $this->message->validate();
 
-            Event::dispatch(new SmsSent($this->message, $this->provider, true));
-
-            Log::info('SMS sent successfully', [
+            Log::info('Sending SMS', [
                 'provider' => $this->provider,
                 'recipients' => $this->message->getRedactedRecipientsForLogging(),
                 'template_id' => $this->message->getTemplateId(),
             ]);
 
-            return $result;
-        } catch (Throwable $e) {
-            Log::error('SMS sending failed', [
-                'provider' => $this->provider,
-                'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                'template_id' => $this->message->getTemplateId(),
-                'error' => $e->getMessage(),
-            ]);
+            Event::dispatch(new SmsSending($this->message, $this->provider));
 
-            Event::dispatch(new SmsSent($this->message, $this->provider, false, $e->getMessage()));
+            try {
+                $driver = $this->resolveDriver();
+                $result = $driver->send($this->message);
 
-            throw $e;
+                Event::dispatch(new SmsSent($this->message, $this->provider, true));
+
+                Log::info('SMS sent successfully', [
+                    'provider' => $this->provider,
+                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                    'template_id' => $this->message->getTemplateId(),
+                ]);
+
+                return $result;
+            } catch (Throwable $e) {
+                Log::error('SMS sending failed', [
+                    'provider' => $this->provider,
+                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                    'template_id' => $this->message->getTemplateId(),
+                    'error' => $e->getMessage(),
+                ]);
+
+                Event::dispatch(new SmsSent($this->message, $this->provider, false, $e->getMessage()));
+
+                throw $e;
+            }
         } finally {
             $this->reset();
         }
     }
 
     /**
+     * Queue the message as one job per recipient, so a retry only resends to the recipient that failed.
+     *
      * @throws InvalidArgumentException
      */
     public function sendLater(): void
     {
-        $this->message->validate();
-
-        $message = clone $this->message;
-        $provider = $this->provider;
-
-        dispatch(new SendSmsJob($message, $provider));
-
-        Log::info('SMS queued', [
-            'provider' => $provider,
-            'recipients' => $message->getRedactedRecipientsForLogging(),
-            'template_id' => $message->getTemplateId(),
-        ]);
-
-        $this->reset();
+        $this->queue();
     }
 
     /**
@@ -152,25 +143,40 @@ class SmsManager
     }
 
     /**
+     * Schedule the message as one job per recipient (see sendLater()).
+     *
      * @throws InvalidArgumentException
      */
     public function sendLaterAt(DateTimeInterface $datetime): void
     {
-        $this->message->validate();
+        $this->queue($datetime);
+    }
 
-        $message = clone $this->message;
-        $provider = $this->provider;
+    /**
+     * @throws InvalidArgumentException
+     */
+    protected function queue(?DateTimeInterface $delay = null): void
+    {
+        try {
+            $this->message->validate();
 
-        dispatch(new SendSmsJob($message, $provider))->delay($datetime);
+            foreach ($this->message->getTo() as $recipient) {
+                $pending = dispatch($this->makeJob($this->message->forRecipient($recipient), $this->provider));
 
-        Log::info('SMS scheduled', [
-            'provider' => $provider,
-            'recipients' => $message->getRedactedRecipientsForLogging(),
-            'template_id' => $message->getTemplateId(),
-            'scheduled_at' => $datetime->format('Y-m-d H:i:s'),
-        ]);
+                if ($delay !== null) {
+                    $pending->delay($delay);
+                }
+            }
 
-        $this->reset();
+            Log::info($delay === null ? 'SMS queued' : 'SMS scheduled', array_filter([
+                'provider' => $this->provider,
+                'recipients' => $this->message->getRedactedRecipientsForLogging(),
+                'template_id' => $this->message->getTemplateId(),
+                'scheduled_at' => $delay?->format('Y-m-d H:i:s'),
+            ], fn (mixed $value): bool => $value !== null));
+        } finally {
+            $this->reset();
+        }
     }
 
     /**
@@ -179,15 +185,30 @@ class SmsManager
      */
     public function send(): bool
     {
-        $queue = config('sms.queue', false);
-
-        if ($queue === true) {
+        if (filter_var(config('sms.queue', false), FILTER_VALIDATE_BOOLEAN)) {
             $this->sendLater();
 
             return true;
         }
 
         return $this->sendNow();
+    }
+
+    protected function makeJob(SmsMessage $message, string $provider): SendSmsJob
+    {
+        $job = new SendSmsJob($message, $provider);
+
+        $connection = config('sms.queue_connection');
+        if (is_string($connection) && $connection !== '') {
+            $job->onConnection($connection);
+        }
+
+        $queue = config('sms.queue_name');
+        if (is_string($queue) && $queue !== '') {
+            $job->onQueue($queue);
+        }
+
+        return $job;
     }
 
     /**
@@ -254,11 +275,21 @@ class SmsManager
     }
 
     /**
+     * Resolve a configured driver instance by name (defaults to the current provider).
+     *
      * @throws InvalidArgumentException
      */
-    protected function resolveDriver(): SmsProvider
+    public function driver(?string $name = null): SmsProvider
     {
-        $actualProvider = $this->pickDriver();
+        return $this->resolveDriver($name);
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    protected function resolveDriver(?string $name = null): SmsProvider
+    {
+        $actualProvider = $name ?? $this->pickDriver();
 
         if (isset($this->driverCache[$actualProvider])) {
             return $this->driverCache[$actualProvider];

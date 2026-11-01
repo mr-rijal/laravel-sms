@@ -96,6 +96,17 @@ class SmsMessage
     }
 
     /**
+     * Copy of this message addressed to a single recipient.
+     */
+    public function forRecipient(string $number): self
+    {
+        $copy = clone $this;
+        $copy->to = [];
+
+        return $copy->to($number);
+    }
+
+    /**
      * @return list<string>
      */
     public function getTo(): array
