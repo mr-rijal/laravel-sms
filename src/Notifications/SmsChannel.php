@@ -47,7 +47,8 @@ class SmsChannel
             }
 
             /** @var string|list<string> $route */
-            $message->to($route);
+            // Clone, so a message object reused across notifiables never accumulates their numbers.
+            $message = (clone $message)->to($route);
 
             if ($message->getTo() === []) {
                 return null;

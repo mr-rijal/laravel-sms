@@ -10,9 +10,9 @@
 One fluent API for sending SMS from Laravel through 20 providers, with failover, queueing, notifications, delivery webhooks and first-class testing.
 
 ```php
-$result = Sms::to('+15551234567')->message('Your code is 4821')->send();
+$result = Sms::to('+15551234567')->message('Your code is 4821')->sendNow();
 
-$result->firstId(); // the provider's message ID
+$result?->firstId(); // the provider's message ID (null if an SmsSending listener cancelled the send)
 ```
 
 ## Highlights
@@ -20,7 +20,7 @@ $result->firstId(); // the provider's message ID
 - **20 providers**, from global platforms to regional gateways, plus `log`, `fake` and `failover` drivers.
 - **Fast:** built on Laravel's HTTP client. Providers without a bulk endpoint get concurrent per-recipient requests (`Http::pool`), and bulk providers get one request for everyone.
 - **Reliable:** every send returns an `SmsResult` with message IDs. Partial failures say exactly which recipients failed, and `failover` retries only those recipients on the next provider.
-- **Secure:** webhooks fail closed with signature checks, queued jobs are encrypted, and secrets never appear in exception messages or cache keys.
+- **Secure:** webhooks fail closed with signature checks, queued jobs are encrypted, and the package never puts credentials in exception messages, URLs or cache keys.
 - **Testable:** `Sms::fake()` with `assertSent()`, `assertSentTo()` and `assertQueued()`, and every driver works with `Http::fake()`.
 - **Laravel-native:** Octane- and queue-safe (each send builds a fresh message), notification channel, events, macros, `Sms::extend()`, `php artisan sms:test`, and `php artisan about` integration.
 - **Typed:** PHPStan at max level.
@@ -149,7 +149,9 @@ Sms::to($numbers)->message('Hi')->sendLater();
 Sms::to($numbers)->message('Hi')->sendLaterAt(now()->addMinutes(10));
 ```
 
-Set `SMS_QUEUE=true` to make `send()` queue by default. Queued messages are split into **one job per recipient**, so a retry never re-sends to someone who already got the message. Jobs are encrypted with your `APP_KEY`.
+Set `SMS_QUEUE=true` to make `send()` queue by default (then `send()` returns `null`). Queued messages are split into **one job per recipient**, so a provider error for one recipient never makes the retry re-send to the others. Jobs are encrypted with your `APP_KEY`.
+
+SMS delivery is still at-least-once: if a provider accepts a message but the response is lost (a timeout, a dropped connection), the retry, or failover, can send it to that recipient again.
 
 ```env
 SMS_QUEUE_CONNECTION=redis
@@ -255,8 +257,12 @@ Webhook routes use the stateless `api` middleware group with `throttle:120,1`. C
 ## Custom drivers
 
 ```php
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use MrRijal\LaravelSms\Drivers\HttpDriver;
 use MrRijal\LaravelSms\SentMessage;
+use MrRijal\LaravelSms\SmsMessage;
+use MrRijal\LaravelSms\SmsResult;
 
 class AcmeDriver extends HttpDriver
 {
@@ -302,18 +308,32 @@ Any class implementing `Contracts\SmsProvider` works as a driver.
 use MrRijal\LaravelSms\Facades\Sms;
 use MrRijal\LaravelSms\SmsMessage;
 
-Sms::fake();
+public function test_it_sends_the_login_code(): void
+{
+    Sms::fake();
 
-// ... run your code ...
+    // ... run your code ...
 
-Sms::assertSentTo('+15551234567');
-Sms::assertSent(fn (SmsMessage $sms) => str_contains($sms->getText(), 'code'));
-Sms::assertSentCount(1);
-Sms::assertQueued(2);
-Sms::assertNothingSent();
+    Sms::assertSentTo('+15551234567');
+    Sms::assertSent(fn (SmsMessage $sms) => str_contains($sms->getText(), 'code'));
+    Sms::assertSentCount(1);
+    Sms::assertQueued(2);
+}
+
+public function test_it_sends_nothing_for_unverified_users(): void
+{
+    Sms::fake();
+
+    // ... run your code ...
+
+    Sms::assertNothingSent();
+    Sms::assertNothingQueued();
+}
 ```
 
-To test a driver end to end without network calls, use `Http::fake()`.
+`Sms::fake()` fires the same events and resolves providers like a real send, so a typo in a provider name still fails your test. It keeps drivers registered with `Sms::extend()`.
+
+To test an HTTP driver end to end without network calls, use `Http::fake()`. The AWS SNS driver uses the AWS SDK instead, so pass a mocked `SnsClient` to `new AwsSnsDriver($config, $client)`.
 
 Run the package's own checks with `composer ci` (Pint, PHPStan at max level, and PHPUnit). CI covers PHP 8.2–8.5 × Laravel 11–13.
 

@@ -49,7 +49,7 @@ class SmsFake extends SmsManager
             return null;
         }
 
-        $this->sent[] = $message;
+        $this->sent[] = clone $message;
 
         $result = SmsResult::accepted($message->getTo(), 'fake-'.count($this->sent), 'accepted')->withProvider($provider);
 

@@ -29,6 +29,9 @@ See [UPGRADE.md](UPGRADE.md) for the breaking changes.
 - Bulk-capable providers (Sparrow, BulkSMS, and others) send one request for all recipients.
 - `aws/aws-sdk-php` is now optional (`suggest`).
 - The manager is a singleton again (per-message state lives in `PendingSms`), so `Sms::extend()` drivers survive Octane requests and queue jobs.
+- `Sms::fake()` fires events, validates provider names, keeps `Sms::extend()` drivers and snapshots sent messages.
+- A failing `SmsSent` listener is reported instead of failing an already-accepted send (no duplicate SMS on job retry).
+- Failover skips providers that cannot send the message type (e.g. template-only) and trims `SMS_FAILOVER_DRIVERS`.
 - Queued job timeout is configurable (`SMS_QUEUE_TIMEOUT`, default 120s) and longer than one HTTP attempt.
 - Phone numbers are normalized (spaces, dashes, dots, parentheses removed); length limit counts characters, not bytes.
 - Successful sends are no longer logged at info level; use the `SmsSent` event.

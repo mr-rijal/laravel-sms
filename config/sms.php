@@ -242,7 +242,7 @@ return [
 
         // Tries each provider in order; recipients that already succeeded are never resent.
         'failover' => [
-            'drivers' => array_filter(explode(',', (string) env('SMS_FAILOVER_DRIVERS', 'twilio,vonage'))),
+            'drivers' => array_values(array_filter(array_map('trim', explode(',', (string) env('SMS_FAILOVER_DRIVERS', 'twilio,vonage'))))),
         ],
 
         'fake' => [],

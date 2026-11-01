@@ -2,6 +2,7 @@
 
 namespace MrRijal\LaravelSms\Tests;
 
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Http\Client\Request;
 use Illuminate\Notifications\AnonymousNotifiable;
@@ -19,6 +20,7 @@ use MrRijal\LaravelSms\Notifications\SmsChannel;
 use MrRijal\LaravelSms\Notifications\SmsNotification;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\Traits\HasSms;
+use Orchestra\Testbench\Exceptions\Handler;
 use PHPUnit\Framework\AssertionFailedError;
 
 class FeatureTest extends TestCase
@@ -186,6 +188,85 @@ class FeatureTest extends TestCase
         $this->artisan('sms:test', ['to' => 'not-a-number'])
             ->expectsOutputToContain('Invalid phone number format')
             ->assertFailed();
+    }
+
+    public function test_failover_skips_providers_that_cannot_send_the_message_type(): void
+    {
+        config(['sms.providers.twilio' => ['sid' => 'AC1', 'token' => 't', 'from' => '+15550000000']]);
+        config(['sms.providers.failover' => ['drivers' => [' twilio', 'fake ']]]);
+
+        $result = Sms::provider('failover')->to('9812345678')->template('OTP', ['otp' => 1])->sendNow();
+
+        $this->assertSame(['9812345678'], $result?->recipients());
+        $this->assertSame('OTP', FakeDriver::$messages[0]['template']);
+    }
+
+    public function test_failing_sms_sent_listener_does_not_fail_an_accepted_send(): void
+    {
+        Event::listen(SmsSent::class, fn () => throw new \RuntimeException('listener broke'));
+        $this->app->instance(ExceptionHandler::class, $handler = new class extends Handler
+        {
+            public array $reported = [];
+
+            public function __construct() {}
+
+            public function report(\Throwable $e): void
+            {
+                $this->reported[] = $e->getMessage();
+            }
+        });
+
+        dispatch_sync(new SendSmsJob(SmsMessage::create('Once')->to('9812345678')));
+
+        $this->assertCount(1, FakeDriver::$messages);
+        $this->assertSame(['listener broke'], $handler->reported);
+    }
+
+    public function test_sms_fake_keeps_custom_drivers_and_snapshots_messages(): void
+    {
+        Sms::extend('acme', fn () => new FakeDriver);
+        Sms::fake();
+
+        $message = SmsMessage::create('Original')->to('9812345678')->provider('acme');
+        Sms::sendNow($message);
+        $message->message('Changed later');
+
+        Sms::assertSent(fn (SmsMessage $m): bool => $m->getText() === 'Original');
+    }
+
+    public function test_channel_does_not_mutate_a_reused_message(): void
+    {
+        $notification = new ReusedMessageNotification;
+
+        (new SmsUser('9812345678'))->notify($notification);
+        (new SmsUser('9800000000'))->notify($notification);
+
+        $this->assertSame(['9812345678'], FakeDriver::$messages[0]['to']);
+        $this->assertSame(['9800000000'], FakeDriver::$messages[1]['to']);
+        $this->assertSame([], $notification->message->getTo());
+    }
+}
+
+class ReusedMessageNotification extends BaseNotification
+{
+    public SmsMessage $message;
+
+    public function __construct()
+    {
+        $this->message = SmsMessage::create('Shared');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function via(mixed $notifiable): array
+    {
+        return ['sms'];
+    }
+
+    public function toSms(mixed $notifiable): SmsMessage
+    {
+        return $this->message;
     }
 }
 

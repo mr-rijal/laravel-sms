@@ -107,7 +107,13 @@ class SmsManager implements Factory
             throw $e;
         }
 
-        $this->events()->dispatch(new SmsSent($message, $provider, $result));
+        // The provider has accepted the message: a failing listener must not make the caller
+        // (or a queued job) think the send failed and send it again.
+        try {
+            $this->events()->dispatch(new SmsSent($message, $provider, $result));
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         return $result;
     }
@@ -161,6 +167,16 @@ class SmsManager implements Factory
     {
         $this->customCreators[$name] = $callback;
         unset($this->drivers[$name]);
+
+        return $this;
+    }
+
+    /**
+     * Copy custom driver registrations from another manager (used by Sms::fake()).
+     */
+    public function inheritCustomCreators(self $manager): static
+    {
+        $this->customCreators = [...$manager->customCreators, ...$this->customCreators];
 
         return $this;
     }

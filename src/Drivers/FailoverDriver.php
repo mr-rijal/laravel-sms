@@ -7,6 +7,7 @@ namespace MrRijal\LaravelSms\Drivers;
 use Illuminate\Container\Container;
 use MrRijal\LaravelSms\Exceptions\DeliveryException;
 use MrRijal\LaravelSms\Exceptions\InvalidConfigurationException;
+use MrRijal\LaravelSms\Exceptions\InvalidMessageException;
 use MrRijal\LaravelSms\SmsManager;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\SmsResult;
@@ -50,7 +51,8 @@ class FailoverDriver extends Driver
                 $remaining = $e->failedRecipients !== [] ? $e->failedRecipients : $pending->getTo();
                 $pending = $message->forRecipients($remaining);
                 $lastError = $e;
-            } catch (InvalidConfigurationException $e) {
+            } catch (InvalidConfigurationException|InvalidMessageException $e) {
+                // Misconfigured, or cannot send this message type (e.g. template-only): try the next provider.
                 $lastError = $e;
             }
         }
@@ -72,8 +74,12 @@ class FailoverDriver extends Driver
     {
         $drivers = $this->config['drivers'] ?? [];
 
-        return is_array($drivers)
-            ? array_values(array_filter($drivers, fn (mixed $driver): bool => is_string($driver) && $driver !== ''))
-            : [];
+        if (! is_array($drivers)) {
+            return [];
+        }
+
+        $names = array_map(fn (mixed $driver): string => is_string($driver) ? trim($driver) : '', $drivers);
+
+        return array_values(array_filter($names, fn (string $driver): bool => $driver !== ''));
     }
 }

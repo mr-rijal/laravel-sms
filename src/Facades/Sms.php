@@ -45,6 +45,11 @@ class Sms extends Facade
         $app = static::getFacadeApplication();
         $fake = new SmsFake($app instanceof \Illuminate\Contracts\Container\Container ? $app : Container::getInstance());
 
+        $current = static::getFacadeRoot();
+        if ($current instanceof SmsManager) {
+            $fake->inheritCustomCreators($current);
+        }
+
         static::swap($fake);
 
         return $fake;
