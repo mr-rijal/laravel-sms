@@ -28,4 +28,17 @@ class PlivoDriverTest extends TestCase
 
         $this->assertTrue($driver->send((new SmsMessage)->to('+15559876543')->message('Hello Plivo')));
     }
+
+    public function test_failure_includes_bounded_provider_error_detail(): void
+    {
+        $client = new Client(['handler' => HandlerStack::create(new MockHandler([
+            new Response(400, [], json_encode(['api_id' => 'x', 'error' => 'src parameter not present'])),
+        ])), 'http_errors' => false]);
+        $driver = new PlivoDriver(['auth_id' => 'id', 'auth_token' => 'token', 'from' => '+15550000000'], $client);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to send SMS via Plivo (HTTP 400): src parameter not present.');
+
+        $driver->send((new SmsMessage)->to('+15551234567')->message('Hello'));
+    }
 }

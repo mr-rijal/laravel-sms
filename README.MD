@@ -121,9 +121,9 @@ return [
         'termii'         => \MrRijal\LaravelSms\Drivers\TermiiDriver::class,
         'africastalking' => \MrRijal\LaravelSms\Drivers\AfricasTalkingDriver::class,
         'bulksms'        => \MrRijal\LaravelSms\Drivers\BulkSmsDriver::class,
-        'telnyx'         => \\MrRijal\\LaravelSms\\Drivers\\TelnyxDriver::class,
-        'plivo'          => \\MrRijal\\LaravelSms\\Drivers\\PlivoDriver::class,
-        'infobip'        => \\MrRijal\\LaravelSms\\Drivers\\InfobipDriver::class,
+        'telnyx'         => \MrRijal\LaravelSms\Drivers\TelnyxDriver::class,
+        'plivo'          => \MrRijal\LaravelSms\Drivers\PlivoDriver::class,
+        'infobip'        => \MrRijal\LaravelSms\Drivers\InfobipDriver::class,
         'fake'           => \MrRijal\LaravelSms\Drivers\FakeDriver::class,
     ],
 

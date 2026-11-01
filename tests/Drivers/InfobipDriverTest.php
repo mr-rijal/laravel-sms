@@ -35,4 +35,17 @@ class InfobipDriverTest extends TestCase
 
         $this->assertTrue($driver->send((new SmsMessage)->to('+15559876543')->message('Hello Infobip')));
     }
+
+    public function test_failure_includes_bounded_provider_error_detail(): void
+    {
+        $client = new Client(['handler' => HandlerStack::create(new MockHandler([
+            new Response(401, [], json_encode(['requestError' => ['serviceException' => ['messageId' => 'UNAUTHORIZED', 'text' => 'Invalid login details']]])),
+        ])), 'http_errors' => false]);
+        $driver = new InfobipDriver(['api_key' => 'key', 'sender' => 'Sender'], $client);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to send SMS via Infobip (HTTP 401): Invalid login details.');
+
+        $driver->send((new SmsMessage)->to('+15551234567')->message('Hello'));
+    }
 }

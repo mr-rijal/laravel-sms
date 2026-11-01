@@ -6,6 +6,7 @@ namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
@@ -70,7 +71,11 @@ class PlivoDriver implements SmsProvider
         $body = json_decode($raw, true);
 
         if ($statusCode !== 202 || ! is_array($body) || ! isset($body['message_uuid']) || ! is_array($body['message_uuid'])) {
-            throw new RuntimeException("Failed to send SMS via Plivo (HTTP {$statusCode}).");
+            $detail = is_array($body) && isset($body['error']) && is_string($body['error']) && $body['error'] !== ''
+                ? ': '.Str::limit($body['error'], 200)
+                : '';
+
+            throw new RuntimeException("Failed to send SMS via Plivo (HTTP {$statusCode}){$detail}.");
         }
     }
 }

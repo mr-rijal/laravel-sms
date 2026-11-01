@@ -6,6 +6,7 @@ namespace MrRijal\LaravelSms\Drivers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
@@ -77,7 +78,21 @@ class InfobipDriver implements SmsProvider
         $body = json_decode($raw, true);
 
         if ($statusCode !== 200 || ! is_array($body) || ! isset($body['messages'][0]['messageId']) || ! is_string($body['messages'][0]['messageId'])) {
-            throw new RuntimeException("Failed to send SMS via Infobip (HTTP {$statusCode}).");
+            throw new RuntimeException("Failed to send SMS via Infobip (HTTP {$statusCode}){$this->errorDetail($body)}.");
         }
+    }
+
+    /**
+     * Bounded provider error text; supports both the current and the legacy Infobip error models.
+     */
+    private function errorDetail(mixed $body): string
+    {
+        if (! is_array($body)) {
+            return '';
+        }
+
+        $text = $body['description'] ?? $body['requestError']['serviceException']['text'] ?? null;
+
+        return is_string($text) && $text !== '' ? ': '.Str::limit($text, 200) : '';
     }
 }
