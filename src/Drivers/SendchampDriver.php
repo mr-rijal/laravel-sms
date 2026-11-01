@@ -4,86 +4,58 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
 use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
 use MrRijal\LaravelSms\SmsMessage;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class SendchampDriver implements HandlesWebhooks, SmsProvider
+/**
+ * Sendchamp (Nigeria). One request for all recipients. Config: api_key, sender_name, route.
+ */
+class SendchampDriver extends HttpDriver implements HandlesWebhooks
 {
     use VerifiesWebhooks;
 
-    private const ROUTES = ['dnd', 'non_dnd', 'international'];
+    protected string $label = 'Sendchamp';
 
-    protected Client $client;
-
-    /**
-     * @param  array<string, mixed>  $config  api_key, sender_name, route (dnd|non_dnd|international)
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['api_key']) || empty($config['sender_name'])) {
-            throw new InvalidArgumentException('Sendchamp configuration is incomplete. Required: api_key, sender_name');
-        }
-
-        $route = $config['route'] ?? 'dnd';
-        if (! is_string($route) || ! in_array($route, self::ROUTES, true)) {
-            throw new InvalidArgumentException('Sendchamp route must be one of: '.implode(', ', self::ROUTES).'.');
-        }
-
-        $this->client = $client ?? new Client([
-            'base_uri' => 'https://api.sendchamp.com/api/v1/',
-            'timeout' => 30,
-            'connect_timeout' => 10,
-            'http_errors' => false,
-        ]);
-    }
-
-    public function send(SmsMessage $message): bool
+    protected function validateConfig(): void
     {
-        $body = trim((string) $message->getText());
-
-        if ($body === '') {
-            throw new InvalidArgumentException('Sendchamp SMS requires a non-empty message body.');
-        }
-
-        try {
-            $response = $this->client->post('sms/send', [
-                'headers' => [
-                    'Authorization' => 'Bearer '.(string) $this->config['api_key'],
-                    'Accept' => 'application/json',
-                ],
-                'json' => [
-                    'to' => array_map(fn (string $number): string => ltrim($number, '+'), $message->getTo()),
-                    'message' => $body,
-                    'sender_name' => (string) $this->config['sender_name'],
-                    'route' => (string) ($this->config['route'] ?? 'dnd'),
-                ],
-            ]);
-        } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to send SMS via Sendchamp (transport error).', 0, $e);
-        }
-
-        $this->assertSendchampSuccess($response);
-
-        return true;
+        $this->require('api_key', 'sender_name');
+        $this->oneOf('route', ['dnd', 'non_dnd', 'international'], 'dnd');
     }
 
-    public function handleWebhook(Request $request): Response
+    public function send(SmsMessage $message): SmsResult
+    {
+        $text = $this->text($message);
+
+        return $this->sendOnce(
+            $message,
+            fn (PendingRequest $request): Response => $request
+                ->withToken($this->value('api_key'))
+                ->post('https://api.sendchamp.com/api/v1/sms/send', [
+                    'to' => array_map(fn (string $to): string => ltrim($to, '+'), $message->getTo()),
+                    'message' => $text,
+                    'sender_name' => $this->sender($message, 'sender_name'),
+                    'route' => $this->oneOf('route', ['dnd', 'non_dnd', 'international'], 'dnd'),
+                ]),
+            function (Response $response) use ($message): SmsResult {
+                if ($response->status() !== 200 || $response->json('status') === 'failed') {
+                    $this->fail($response, 'message');
+                }
+
+                return SmsResult::accepted($message->getTo(), $this->jsonString($response, 'data.business_uid') ?? $this->jsonString($response, 'data.id'), 'accepted');
+            },
+        );
+    }
+
+    public function handleWebhook(Request $request): HttpResponse
     {
         if (! $this->hasValidHmacSignature($request, 'sendchamp', 'X-Sendchamp-Signature')) {
             $this->logRejectedWebhook($request, 'sendchamp');
@@ -108,22 +80,5 @@ class SendchampDriver implements HandlesWebhooks, SmsProvider
         ]);
 
         return response('OK', 200);
-    }
-
-    private function assertSendchampSuccess(ResponseInterface $response): void
-    {
-        $statusCode = $response->getStatusCode();
-        /** @var mixed $body */
-        $body = json_decode((string) $response->getBody(), true);
-
-        if ($statusCode === 200 && ! (is_array($body) && ($body['status'] ?? '') === 'failed')) {
-            return;
-        }
-
-        $detail = is_array($body) && isset($body['message']) && is_string($body['message'])
-            ? ': '.Str::limit($body['message'], 200)
-            : '';
-
-        throw new RuntimeException("Failed to send SMS via Sendchamp (HTTP {$statusCode}){$detail}", $statusCode);
     }
 }

@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### 2.0.0 — core rewrite
+
+See [UPGRADE.md](UPGRADE.md) for the breaking changes.
+
+#### Added
+
+- Sinch, Bird (MessageBird), ClickSend, Clickatell, Brevo, Bandwidth and SendPulse drivers.
+- `failover` driver that retries only the recipients a provider rejected on the next provider.
+- `SmsResult` / `SentMessage` with provider message IDs, returned from every send.
+- `DeliveryException` with `failedRecipients` and `partial` results; `SmsException` marker interface.
+- `Sms::fake()` with `assertSent`, `assertSentTo`, `assertNotSent`, `assertNothingSent`, `assertSentCount`, `assertQueued`, `assertNothingQueued`.
+- `PendingSms` fluent builder (a fresh message per call), `from()` sender override, `Conditionable` support.
+- `SmsFailed` event; `SmsSending` listeners can cancel a send by returning `false`.
+- `Sms::extend()` for custom drivers, `HttpDriver` base class for HTTP providers.
+- `php artisan sms:test` command and `php artisan about` section.
+- Concurrent per-recipient sends (`sms.http.concurrency`), configurable timeouts, OAuth token caching.
+- Twilio Messaging Service support, Vonage automatic Unicode, Brevo templates, AWS SNS IAM-role credentials.
+- Notifications can return a string or `SmsMessage` and support `Notification::route('sms', ...)`.
+
+#### Changed
+
+- All drivers use Laravel's HTTP client (fakeable with `Http::fake()`) instead of Guzzle directly.
+- Bulk-capable providers (Sparrow, BulkSMS, and others) send one request for all recipients.
+- `aws/aws-sdk-php` is now optional (`suggest`).
+- Phone numbers are normalized (spaces, dashes, dots, parentheses removed); length limit counts characters, not bytes.
+- Successful sends are no longer logged at info level; use the `SmsSent` event.
+- PHPStan runs at max level.
+
+#### Removed
+
+- Telegram, Discord and Slack mirror drivers.
+- `SmsManager::sendMessage()`; `SmsSent::$success` and `SmsSent::$error`.
+
+### 1.x
+
 ### Added
 
 - Telnyx, Plivo, and Infobip SMS drivers (from #13).

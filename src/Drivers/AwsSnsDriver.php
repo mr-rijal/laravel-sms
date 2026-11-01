@@ -6,95 +6,95 @@ namespace MrRijal\LaravelSms\Drivers;
 
 use Aws\Exception\AwsException;
 use Aws\Sns\SnsClient;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use MrRijal\LaravelSms\Exceptions\DeliveryException;
+use MrRijal\LaravelSms\Exceptions\InvalidConfigurationException;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use RuntimeException;
-use Throwable;
+use MrRijal\LaravelSms\SmsResult;
 
-class AwsSnsDriver implements SmsProvider
+/**
+ * Amazon SNS SMS. Requires aws/aws-sdk-php. Config: region, optional key/secret (omit them to use
+ * the default AWS credential chain, e.g. IAM roles), sender_id, sms_type (Transactional|Promotional).
+ */
+class AwsSnsDriver extends Driver
 {
-    protected SnsClient $client;
+    protected string $label = 'AWS SNS';
+
+    protected ?SnsClient $client = null;
 
     /**
-     * @param  array<string, mixed>  $config  key, secret, region, optional sender_id, sms_type
+     * @param  array<string, mixed>  $config
      */
     public function __construct(
         #[\SensitiveParameter]
-        protected array $config,
+        array $config = [],
         ?SnsClient $client = null,
     ) {
-        if (empty($config['key']) || empty($config['secret']) || empty($config['region'])) {
-            throw new InvalidArgumentException('AWS SNS configuration is incomplete. key, secret, and region are required.');
-        }
-
-        $this->client = $client ?? new SnsClient([
-            'version' => 'latest',
-            'region' => (string) $config['region'],
-            'credentials' => [
-                'key' => (string) $config['key'],
-                'secret' => (string) $config['secret'],
-            ],
-        ]);
+        parent::__construct($config);
+        $this->client = $client;
     }
 
-    public function send(SmsMessage $message): bool
+    protected function validateConfig(): void
     {
-        $messageText = $message->getText();
-
-        if ($messageText === null) {
-            throw new InvalidArgumentException($message->getTemplateId() === null
-                ? 'Message text or template ID is required'
-                : 'AWS SNS requires message text. Template-based messaging is not directly supported.');
+        if (! class_exists(SnsClient::class)) {
+            throw new InvalidConfigurationException('The AWS SNS driver requires aws/aws-sdk-php. Run: composer require aws/aws-sdk-php');
         }
+
+        $this->require('region');
+        $this->oneOf('sms_type', ['Transactional', 'Promotional'], 'Transactional');
+    }
+
+    public function send(SmsMessage $message): SmsResult
+    {
+        $text = $this->text($message);
+        $client = $this->client();
+        $sent = [];
+        $failed = [];
+        $error = null;
 
         foreach ($message->getTo() as $to) {
             try {
-                $params = [
+                $result = $client->publish([
                     'PhoneNumber' => $to,
-                    'Message' => $messageText,
-                ];
+                    'Message' => $text,
+                    'MessageAttributes' => array_filter([
+                        'AWS.SNS.SMS.SenderID' => ($sender = $this->sender($message, 'sender_id')) !== null
+                            ? ['DataType' => 'String', 'StringValue' => $sender]
+                            : null,
+                        'AWS.SNS.SMS.SMSType' => [
+                            'DataType' => 'String',
+                            'StringValue' => $this->oneOf('sms_type', ['Transactional', 'Promotional'], 'Transactional'),
+                        ],
+                    ]),
+                ]);
 
-                $messageAttributes = [];
-
-                if (! empty($this->config['sender_id'])) {
-                    $messageAttributes['AWS.SNS.SMS.SenderID'] = [
-                        'DataType' => 'String',
-                        'StringValue' => (string) $this->config['sender_id'],
-                    ];
-                }
-
-                if (! empty($this->config['sms_type'])) {
-                    $messageAttributes['AWS.SNS.SMS.SMSType'] = [
-                        'DataType' => 'String',
-                        'StringValue' => (string) $this->config['sms_type'],
-                    ];
-                }
-
-                if ($messageAttributes !== []) {
-                    $params['MessageAttributes'] = $messageAttributes;
-                }
-
-                $result = $this->client->publish($params);
-
-                if (! isset($result['MessageId'])) {
-                    throw new RuntimeException('Failed to send SMS via AWS SNS: No message ID returned');
-                }
+                $id = $result['MessageId'] ?? null;
+                $sent[] = new SentMessage($to, is_string($id) ? $id : null, 'accepted');
             } catch (AwsException $e) {
-                throw new RuntimeException(
-                    "Failed to send SMS via AWS SNS: {$e->getAwsErrorMessage()}",
-                    $e->getCode(),
-                    $e
-                );
-            } catch (Throwable $e) {
-                throw new RuntimeException(
-                    "Failed to send SMS via AWS SNS: {$e->getMessage()}",
-                    (int) $e->getCode(),
-                    $e
+                $failed[] = $to;
+                $error ??= new DeliveryException(
+                    'Failed to send SMS via AWS SNS: '.($e->getAwsErrorMessage() ?? $e->getAwsErrorCode() ?? 'unknown error'),
+                    $this->label,
+                    previous: $e,
                 );
             }
         }
 
-        return true;
+        if ($error !== null) {
+            throw new DeliveryException($error->getMessage(), $this->label, $failed, new SmsResult($sent), 0, $error->getPrevious());
+        }
+
+        return new SmsResult($sent);
+    }
+
+    protected function client(): SnsClient
+    {
+        $options = ['version' => '2010-03-31', 'region' => $this->value('region')];
+
+        if ($this->string('key') !== null && $this->string('secret') !== null) {
+            $options['credentials'] = ['key' => $this->value('key'), 'secret' => $this->value('secret')];
+        }
+
+        return $this->client ??= new SnsClient($options);
     }
 }

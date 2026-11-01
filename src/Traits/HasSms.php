@@ -5,19 +5,21 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Traits;
 
 use MrRijal\LaravelSms\Facades\Sms;
+use MrRijal\LaravelSms\SmsResult;
 
+/**
+ * Convenience helpers for notifiable models that implement routeNotificationForSms().
+ */
 trait HasSms
 {
     abstract public function routeNotificationForSms(): string;
 
-    public function sms(string $message): bool
+    public function sms(string $message): ?SmsResult
     {
-        return Sms::to($this->routeNotificationForSms())
-            ->message($message)
-            ->sendNow();
+        return Sms::to($this->smsRoute())->message($message)->sendNow();
     }
 
-    public function sendSms(string $message): bool
+    public function sendSms(string $message): ?SmsResult
     {
         return $this->sms($message);
     }
@@ -25,20 +27,13 @@ trait HasSms
     /**
      * @param  array<string, mixed>  $variables
      */
-    public function smsTemplate(string $templateId, array $variables = []): bool
+    public function smsTemplate(string $templateId, array $variables = []): ?SmsResult
     {
-        return Sms::to($this->routeNotificationForSms())
-            ->template($templateId, $variables)
-            ->sendNow();
+        return Sms::to($this->smsRoute())->template($templateId, $variables)->sendNow();
     }
 
-    /**
-     * @param  iterable<int, object&static>  $users
-     */
-    public static function smsMany(iterable $users, string $message): void
+    protected function smsRoute(): string
     {
-        foreach ($users as $user) {
-            $user->sms($message);
-        }
+        return $this->routeNotificationForSms();
     }
 }

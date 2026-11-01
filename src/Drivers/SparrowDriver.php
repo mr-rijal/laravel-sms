@@ -4,65 +4,42 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use MrRijal\LaravelSms\SmsMessage;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class SparrowDriver implements SmsProvider
+/**
+ * Sparrow SMS (Nepal). One request for all recipients. Config: token, from.
+ */
+class SparrowDriver extends HttpDriver
 {
-    protected ?Client $client = null;
+    protected string $label = 'Sparrow';
 
-    /**
-     * @param  array<string, mixed>  $config  token, from
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['token']) || empty($config['from'])) {
-            throw new InvalidArgumentException('Sparrow configuration is incomplete');
-        }
-        $this->client = $client;
+    protected function validateConfig(): void
+    {
+        $this->require('token', 'from');
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        $rawText = $message->getText();
-        $trimmedText = $rawText !== null ? trim($rawText) : '';
+        $text = $this->text($message);
 
-        if ($trimmedText === '' && $message->getTemplateId() === null) {
-            throw new InvalidArgumentException('Message text or template ID is required');
-        }
-
-        $client = $this->client ?? new Client(['timeout' => 30]);
-
-        foreach ($message->getTo() as $to) {
-            try {
-                $response = $client->post('https://api.sparrowsms.com/v2/sms/', [
-                    'form_params' => [
-                        'token' => (string) $this->config['token'],
-                        'from' => (string) $this->config['from'],
-                        'to' => $to,
-                        'text' => $trimmedText,
-                    ],
-                ]);
-
-                if ($response->getStatusCode() !== 200) {
-                    throw new RuntimeException('Failed to send SMS via Sparrow: '.$response->getBody()->getContents());
+        return $this->sendOnce(
+            $message,
+            fn (PendingRequest $request): Response => $request->asForm()->post('https://api.sparrowsms.com/v2/sms/', [
+                'token' => $this->value('token'),
+                'from' => $this->sender($message),
+                'to' => implode(',', array_map(fn (string $to): string => ltrim($to, '+'), $message->getTo())),
+                'text' => $text,
+            ]),
+            function (Response $response) use ($message): SmsResult {
+                if (! $response->successful() || ($this->jsonString($response, 'response_code') ?? '200') !== '200') {
+                    $this->fail($response, 'response');
                 }
-            } catch (GuzzleException $e) {
-                throw new RuntimeException(
-                    "Failed to send SMS via Sparrow: {$e->getMessage()}",
-                    0,
-                    $e
-                );
-            }
-        }
 
-        return true;
+                return SmsResult::accepted($message->getTo(), $this->jsonString($response, 'message_id'), 'accepted');
+            },
+        );
     }
 }

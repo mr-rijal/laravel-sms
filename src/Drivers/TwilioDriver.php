@@ -4,94 +4,52 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\BadResponseException;
-use GuzzleHttp\Exception\GuzzleException;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use MrRijal\LaravelSms\Exceptions\InvalidConfigurationException;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class TwilioDriver implements SmsProvider
+/**
+ * Twilio Programmable Messaging. Config: sid, token, and from or messaging_service_sid.
+ */
+class TwilioDriver extends HttpDriver
 {
-    protected Client $client;
+    protected string $label = 'Twilio';
 
-    /**
-     * @param  array<string, mixed>  $config  sid, token, from
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['sid']) || empty($config['token']) || empty($config['from'])) {
-            throw new InvalidArgumentException('Twilio configuration is incomplete');
+    protected function validateConfig(): void
+    {
+        $this->require('sid', 'token');
+
+        if ($this->string('from') === null && $this->string('messaging_service_sid') === null) {
+            throw new InvalidConfigurationException('Twilio configuration is incomplete. Required: from or messaging_service_sid');
         }
-
-        $sid = (string) $config['sid'];
-        $token = (string) $config['token'];
-
-        $this->client = $client ?? new Client([
-            'base_uri' => 'https://api.twilio.com/2010-04-01/',
-            'auth' => [$sid, $token],
-            'timeout' => 30,
-        ]);
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        $rawText = $message->getText();
-        $body = $rawText !== null ? trim($rawText) : '';
+        $body = $this->text($message);
+        $sid = rawurlencode($this->value('sid'));
 
-        if ($body === '') {
-            throw new InvalidArgumentException('Twilio SMS requires a non-empty message body; template-only messages are not supported.');
-        }
+        return $this->sendEach(
+            $message,
+            fn (PendingRequest $request, string $to): mixed => $request
+                ->withBasicAuth($this->value('sid'), $this->value('token'))
+                ->asForm()
+                ->post("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json", array_filter([
+                    'To' => $to,
+                    'Body' => $body,
+                    'From' => $this->sender($message),
+                    'MessagingServiceSid' => $message->getFrom() === null ? $this->string('messaging_service_sid') : null,
+                ])),
+            function (Response $response, string $to): SentMessage {
+                if ($response->status() !== 201) {
+                    $this->fail($response, 'message');
+                }
 
-        $accountSid = (string) $this->config['sid'];
-
-        foreach ($message->getTo() as $to) {
-            try {
-                $response = $this->client->post(
-                    "Accounts/{$accountSid}/Messages.json",
-                    [
-                        'form_params' => [
-                            'From' => (string) $this->config['from'],
-                            'To' => $to,
-                            'Body' => $body,
-                        ],
-                    ]
-                );
-
-                $this->assertTwilioSuccess($response);
-            } catch (GuzzleException $e) {
-                $statusCode = $e instanceof BadResponseException ? $e->getResponse()->getStatusCode() : 0;
-                throw new RuntimeException(
-                    "Failed to send SMS via Twilio: {$e->getMessage()}",
-                    $statusCode,
-                    $e
-                );
-            }
-        }
-
-        return true;
-    }
-
-    private function assertTwilioSuccess(ResponseInterface $response): void
-    {
-        $statusCode = $response->getStatusCode();
-        $raw = $response->getBody()->getContents();
-        /** @var mixed $body */
-        $body = json_decode($raw, true);
-
-        if ($statusCode !== 201) {
-            $errorMessage = is_array($body) && isset($body['message']) && is_string($body['message'])
-                ? $body['message']
-                : $raw;
-            throw new RuntimeException(
-                "Failed to send SMS via Twilio: {$errorMessage}",
-                $statusCode
-            );
-        }
+                return new SentMessage($to, $this->jsonString($response, 'sid'), $this->jsonString($response, 'status'));
+            },
+        );
     }
 }

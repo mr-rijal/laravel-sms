@@ -4,252 +4,105 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\BadResponseException;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use InvalidArgumentException;
 use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
 use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class WhatsAppDriver implements HandlesWebhooks, SmsProvider
+/**
+ * WhatsApp Business Cloud API. Text or approved template messages.
+ * Config: phone_number_id, access_token, api_version, template_language, preview_url, default_country_code.
+ */
+class WhatsAppDriver extends HttpDriver implements HandlesWebhooks
 {
     use VerifiesWebhooks;
 
-    protected Client $client;
+    protected string $label = 'WhatsApp';
 
-    protected string $apiVersion;
-
-    protected string $phoneNumberId;
-
-    protected string $accessToken;
-
-    protected string $businessAccountId;
-
-    /**
-     * @param  array<string, mixed>  $config  phone_number_id, access_token, optional api_version, business_account_id, template_language, preview_url, default_country_code
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['phone_number_id']) || empty($config['access_token'])) {
-            throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
-        }
-
-        $trimmedPhoneNumberId = trim((string) $config['phone_number_id']);
-        $trimmedAccessToken = trim((string) $config['access_token']);
-
-        if ($trimmedPhoneNumberId === '' || $trimmedAccessToken === '') {
-            throw new InvalidArgumentException('WhatsApp Business API configuration is incomplete. phone_number_id and access_token are required.');
-        }
-
-        $this->phoneNumberId = $trimmedPhoneNumberId;
-        $this->accessToken = $trimmedAccessToken;
-        $this->apiVersion = isset($config['api_version']) && is_string($config['api_version']) ? $config['api_version'] : 'v21.0';
-        $this->businessAccountId = isset($config['business_account_id']) && is_string($config['business_account_id'])
-            ? $config['business_account_id']
-            : '';
-
-        $this->client = $client ?? new Client([
-            'base_uri' => "https://graph.facebook.com/{$this->apiVersion}/",
-            'timeout' => 30,
-        ]);
+    protected function validateConfig(): void
+    {
+        $this->require('phone_number_id', 'access_token');
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        $trimmedText = trim((string) $message->getText());
-        $trimmedTemplateId = trim((string) $message->getTemplateId());
+        $message->validate();
+        $version = rawurlencode($this->string('api_version', 'v21.0') ?? 'v21.0');
+        $phoneNumberId = rawurlencode($this->value('phone_number_id'));
 
-        if ($trimmedText === '' && $trimmedTemplateId === '') {
-            throw new InvalidArgumentException('Message text or template ID is required');
-        }
+        return $this->sendEach(
+            $message,
+            fn (PendingRequest $request, string $to): mixed => $request
+                ->withToken($this->value('access_token'))
+                ->post("https://graph.facebook.com/{$version}/{$phoneNumberId}/messages", $this->payload($message, $to)),
+            function (Response $response, string $to): SentMessage {
+                $id = $this->jsonString($response, 'messages.0.id');
 
-        foreach ($message->getTo() as $to) {
-            try {
-                if ($trimmedTemplateId !== '') {
-                    $this->sendTemplateMessage($to, $message);
-                } else {
-                    $this->sendTextMessage($to, $message);
+                if ($response->status() !== 200 || $id === null) {
+                    $this->fail($response, ['error.message', 'error.error_user_msg']);
                 }
-            } catch (GuzzleException $e) {
-                $statusCode = $e instanceof BadResponseException ? $e->getResponse()->getStatusCode() : 0;
-                throw new RuntimeException(
-                    "Failed to send WhatsApp message: {$e->getMessage()}",
-                    $statusCode,
-                    $e
-                );
-            }
-        }
 
-        return true;
-    }
-
-    protected function sendTextMessage(string $to, SmsMessage $message): void
-    {
-        $phoneNumber = $this->formatPhoneNumber($to);
-        $body = trim((string) $message->getText());
-        if ($body === '') {
-            throw new InvalidArgumentException('Message text is required for WhatsApp text messages.');
-        }
-
-        $preview = $this->config['preview_url'] ?? false;
-
-        $payload = [
-            'messaging_product' => 'whatsapp',
-            'recipient_type' => 'individual',
-            'to' => $phoneNumber,
-            'type' => 'text',
-            'text' => [
-                'preview_url' => is_bool($preview) ? $preview : false,
-                'body' => $body,
-            ],
-        ];
-
-        $response = $this->client->post(
-            "{$this->phoneNumberId}/messages",
-            [
-                'headers' => [
-                    'Authorization' => "Bearer {$this->accessToken}",
-                    'Content-Type' => 'application/json',
-                ],
-                'json' => $payload,
-            ]
+                return new SentMessage($to, $id, $this->jsonString($response, 'messages.0.message_status') ?? 'accepted');
+            },
         );
-
-        $this->handleResponse($response, 'text message');
-    }
-
-    protected function sendTemplateMessage(string $to, SmsMessage $message): void
-    {
-        $phoneNumber = $this->formatPhoneNumber($to);
-        $templateId = trim((string) $message->getTemplateId());
-        if ($templateId === '') {
-            throw new InvalidArgumentException('Template ID is required.');
-        }
-
-        $variables = $message->getVariables();
-        $components = [];
-
-        if ($variables !== []) {
-            $components[] = [
-                'type' => 'body',
-                'parameters' => $this->formatTemplateParameters($variables),
-            ];
-        }
-
-        $lang = $this->config['template_language'] ?? 'en';
-        $languageCode = is_string($lang) ? $lang : 'en';
-
-        $payload = [
-            'messaging_product' => 'whatsapp',
-            'recipient_type' => 'individual',
-            'to' => $phoneNumber,
-            'type' => 'template',
-            'template' => [
-                'name' => $templateId,
-                'language' => [
-                    'code' => $languageCode,
-                ],
-            ],
-        ];
-
-        if ($components !== []) {
-            $payload['template']['components'] = $components;
-        }
-
-        $response = $this->client->post(
-            "{$this->phoneNumberId}/messages",
-            [
-                'headers' => [
-                    'Authorization' => "Bearer {$this->accessToken}",
-                    'Content-Type' => 'application/json',
-                ],
-                'json' => $payload,
-            ]
-        );
-
-        $this->handleResponse($response, 'template message');
-    }
-
-    protected function formatPhoneNumber(string $phoneNumber): string
-    {
-        $normalized = preg_replace('/[^0-9+]/', '', $phoneNumber);
-        if ($normalized === null) {
-            throw new RuntimeException('Invalid phone number.');
-        }
-
-        if ($normalized !== '' && ! str_starts_with($normalized, '+')) {
-            $defaultCountryCode = $this->config['default_country_code'] ?? '';
-            if (is_string($defaultCountryCode) && $defaultCountryCode !== '') {
-                $normalized = $defaultCountryCode.$normalized;
-            }
-        }
-
-        if (! preg_match('/\d/', $normalized) || $normalized === '+') {
-            throw new RuntimeException('Invalid phone number.');
-        }
-
-        return $normalized;
     }
 
     /**
-     * @param  array<string|int, mixed>  $variables
-     * @return list<array{type: 'text', text: string}>
+     * @return array<string, mixed>
      */
-    protected function formatTemplateParameters(array $variables): array
+    protected function payload(SmsMessage $message, string $to): array
     {
-        $parameters = [];
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $this->formatPhoneNumber($to),
+        ];
 
-        foreach ($variables as $value) {
-            $parameters[] = [
+        $templateId = $message->getTemplateId();
+
+        if ($templateId === null) {
+            return $payload + [
                 'type' => 'text',
-                'text' => (string) $value,
+                'text' => ['preview_url' => $this->bool('preview_url'), 'body' => (string) $message->getText()],
             ];
         }
 
-        return $parameters;
-    }
+        $template = [
+            'name' => $templateId,
+            'language' => ['code' => $this->string('template_language', 'en')],
+        ];
 
-    protected function handleResponse(ResponseInterface $response, string $messageType): void
-    {
-        $statusCode = $response->getStatusCode();
-        $raw = $response->getBody()->getContents();
-        /** @var mixed $body */
-        $body = json_decode($raw, true);
-
-        if ($statusCode !== 200) {
-            $errorMessage = 'Unknown error';
-            $errorCode = $statusCode;
-            if (is_array($body) && isset($body['error']) && is_array($body['error'])) {
-                $err = $body['error'];
-                if (isset($err['message']) && is_string($err['message'])) {
-                    $errorMessage = $err['message'];
-                } elseif (isset($err['error_user_msg']) && is_string($err['error_user_msg'])) {
-                    $errorMessage = $err['error_user_msg'];
-                }
-                if (isset($err['code'])) {
-                    $errorCode = is_int($err['code']) ? $err['code'] : $statusCode;
-                }
-            }
-            throw new RuntimeException(
-                "Failed to send WhatsApp {$messageType}: {$errorMessage} (Code: {$errorCode})",
-                $statusCode
-            );
+        if ($message->getVariables() !== []) {
+            $template['components'] = [[
+                'type' => 'body',
+                'parameters' => array_values(array_map(
+                    fn (mixed $value): array => ['type' => 'text', 'text' => is_scalar($value) ? (string) $value : ''],
+                    $message->getVariables(),
+                )),
+            ]];
         }
+
+        return $payload + ['type' => 'template', 'template' => $template];
     }
 
-    public function handleWebhook(Request $request): Response
+    protected function formatPhoneNumber(string $number): string
+    {
+        if (! str_starts_with($number, '+') && ($code = $this->string('default_country_code')) !== null) {
+            return ltrim($code, '+').$number;
+        }
+
+        return ltrim($number, '+');
+    }
+
+    public function handleWebhook(Request $request): HttpResponse
     {
         if ($request->isMethod('GET')) {
             return $this->handleVerification($request);
@@ -281,7 +134,7 @@ class WhatsAppDriver implements HandlesWebhooks, SmsProvider
         return response('OK', 200);
     }
 
-    protected function handleVerification(Request $request): Response
+    protected function handleVerification(Request $request): HttpResponse
     {
         $webhookConfig = config('sms.webhooks.whatsapp', []);
         $verifyToken = '';
@@ -337,22 +190,23 @@ class WhatsAppDriver implements HandlesWebhooks, SmsProvider
             'recipient' => null,
         ];
 
-        if (! isset($payload['entry'][0]['changes'][0]['value']) || ! is_array($payload['entry'][0]['changes'][0]['value'])) {
+        $value = data_get($payload, 'entry.0.changes.0.value');
+
+        if (! is_array($value)) {
             return $data;
         }
 
-        /** @var array<string, mixed> $value */
-        $value = $payload['entry'][0]['changes'][0]['value'];
+        $status = data_get($value, 'statuses.0');
 
-        if (isset($value['statuses'][0]) && is_array($value['statuses'][0])) {
-            $status = $value['statuses'][0];
+        if (is_array($status)) {
             $data['message_id'] = isset($status['id']) && is_string($status['id']) ? $status['id'] : null;
             $data['status'] = isset($status['status']) && is_string($status['status']) ? $status['status'] : null;
             $data['recipient'] = isset($status['recipient_id']) && is_string($status['recipient_id']) ? $status['recipient_id'] : null;
         }
 
-        if (isset($value['messages'][0]) && is_array($value['messages'][0])) {
-            $msg = $value['messages'][0];
+        $msg = data_get($value, 'messages.0');
+
+        if (is_array($msg)) {
             $data['message_id'] = isset($msg['id']) && is_string($msg['id']) ? $msg['id'] : null;
             $data['status'] = 'received';
             $data['recipient'] = isset($msg['from']) && is_string($msg['from']) ? $msg['from'] : null;

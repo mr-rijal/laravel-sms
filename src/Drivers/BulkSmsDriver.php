@@ -4,87 +4,67 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
 use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class BulkSmsDriver implements HandlesWebhooks, SmsProvider
+/**
+ * BulkSMS.com. One request for all recipients. Config: token_id, token_secret, optional from.
+ */
+class BulkSmsDriver extends HttpDriver implements HandlesWebhooks
 {
     use VerifiesWebhooks;
 
-    protected Client $client;
+    protected string $label = 'BulkSMS';
 
-    /**
-     * @param  array<string, mixed>  $config  token_id, token_secret, from (optional)
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['token_id']) || empty($config['token_secret'])) {
-            throw new InvalidArgumentException('BulkSMS configuration is incomplete. Required: token_id, token_secret');
-        }
-
-        $this->client = $client ?? new Client([
-            'base_uri' => 'https://api.bulksms.com/v1/',
-            'timeout' => 30,
-            'connect_timeout' => 10,
-            'http_errors' => false,
-        ]);
-    }
-
-    public function send(SmsMessage $message): bool
+    protected function validateConfig(): void
     {
-        $body = trim((string) $message->getText());
-
-        if ($body === '') {
-            throw new InvalidArgumentException('BulkSMS requires a non-empty message body.');
-        }
-
-        $recipients = $message->getTo();
-        if ($recipients === []) {
-            throw new InvalidArgumentException('BulkSMS requires at least one recipient.');
-        }
-
-        $from = isset($this->config['from']) && $this->config['from'] !== '' ? (string) $this->config['from'] : null;
-
-        foreach ($recipients as $to) {
-            $payload = ['to' => $to, 'body' => $body];
-
-            if ($from !== null) {
-                $payload['from'] = $from;
-            }
-
-            try {
-                $response = $this->client->post('messages', [
-                    'auth' => [(string) $this->config['token_id'], (string) $this->config['token_secret']],
-                    'headers' => ['Accept' => 'application/json'],
-                    'json' => $payload,
-                ]);
-            } catch (GuzzleException $e) {
-                throw new RuntimeException('Failed to send SMS via BulkSMS (transport error).', 0, $e);
-            }
-
-            $this->assertBulkSmsSuccess($response);
-        }
-
-        return true;
+        $this->require('token_id', 'token_secret');
     }
 
-    public function handleWebhook(Request $request): Response
+    public function send(SmsMessage $message): SmsResult
+    {
+        $text = $this->text($message);
+        $from = $this->sender($message);
+
+        return $this->sendOnce(
+            $message,
+            fn (PendingRequest $request): Response => $request
+                ->withBasicAuth($this->value('token_id'), $this->value('token_secret'))
+                ->post('https://api.bulksms.com/v1/messages', array_map(
+                    fn (string $to): array => array_filter(['to' => $to, 'body' => $text, 'from' => $from]),
+                    $message->getTo(),
+                )),
+            function (Response $response) use ($message): SmsResult {
+                if (! $response->successful()) {
+                    $this->fail($response, 'detail');
+                }
+
+                $items = $response->json();
+
+                return new SmsResult(array_map(function (string $to, int $i) use ($items): SentMessage {
+                    $item = is_array($items) && is_array($items[$i] ?? null) ? $items[$i] : [];
+
+                    return new SentMessage(
+                        $to,
+                        is_string($item['id'] ?? null) ? $item['id'] : null,
+                        is_string(data_get($item, 'status.type')) ? data_get($item, 'status.type') : 'accepted',
+                    );
+                }, $message->getTo(), array_keys($message->getTo())));
+            },
+        );
+    }
+
+    public function handleWebhook(Request $request): HttpResponse
     {
         if (! $this->hasValidHmacSignature($request, 'bulksms', 'X-BulkSMS-Signature')) {
             $this->logRejectedWebhook($request, 'bulksms');
@@ -112,22 +92,5 @@ class BulkSmsDriver implements HandlesWebhooks, SmsProvider
         ]);
 
         return response('OK', 200);
-    }
-
-    private function assertBulkSmsSuccess(ResponseInterface $response): void
-    {
-        $statusCode = $response->getStatusCode();
-
-        if ($statusCode >= 200 && $statusCode <= 299) {
-            return;
-        }
-
-        /** @var mixed $body */
-        $body = json_decode((string) $response->getBody(), true);
-        $detail = is_array($body) && isset($body['detail']) && is_string($body['detail'])
-            ? ': '.Str::limit($body['detail'], 200)
-            : '';
-
-        throw new RuntimeException("Failed to send SMS via BulkSMS (HTTP {$statusCode}){$detail}", $statusCode);
     }
 }

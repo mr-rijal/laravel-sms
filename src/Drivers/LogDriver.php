@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms\Drivers;
 
 use Illuminate\Support\Facades\Log;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Support\Str;
 use MrRijal\LaravelSms\SmsMessage;
+use MrRijal\LaravelSms\SmsResult;
 
-class LogDriver implements SmsProvider
+/**
+ * Writes messages to the log instead of sending them. Development only: content may be sensitive.
+ */
+class LogDriver extends Driver
 {
-    /**
-     * @param  array<string, mixed>  $config
-     */
-    public function __construct(protected array $config = []) {}
+    protected string $label = 'Log';
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
         $message->validate();
 
@@ -27,14 +28,14 @@ class LogDriver implements SmsProvider
             'variables' => $message->getVariables(),
         ];
 
-        $channel = $this->config['channel'] ?? null;
+        $channel = $this->string('channel');
 
-        if (is_string($channel) && $channel !== '') {
+        if ($channel !== null) {
             Log::channel($channel)->debug('SMS captured by log driver', $context);
         } else {
             Log::debug('SMS captured by log driver', $context);
         }
 
-        return true;
+        return SmsResult::accepted($message->getTo(), 'log-'.Str::uuid()->toString(), 'logged');
     }
 }
