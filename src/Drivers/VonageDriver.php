@@ -4,77 +4,60 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Str;
+use MrRijal\LaravelSms\Exceptions\DeliveryException;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class VonageDriver implements SmsProvider
+/**
+ * Vonage (Nexmo) SMS API. Config: key, secret, from.
+ */
+class VonageDriver extends HttpDriver
 {
-    protected Client $client;
+    protected string $label = 'Vonage';
 
-    /**
-     * @param  array<string, mixed>  $config  key, secret, from
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['key']) || empty($config['secret']) || empty($config['from'])) {
-            throw new InvalidArgumentException('Vonage configuration is incomplete');
-        }
-
-        $this->client = $client ?? new Client([
-            'base_uri' => 'https://rest.nexmo.com/',
-            'timeout' => 30,
-        ]);
+    protected function validateConfig(): void
+    {
+        $this->require('key', 'secret', 'from');
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        if ($message->getText() === null && $message->getTemplateId() === null) {
-            throw new InvalidArgumentException('Message text or template ID is required');
-        }
+        $text = $this->text($message);
+        $unicode = ! self::isGsm($text);
 
-        foreach ($message->getTo() as $to) {
-            try {
-                $response = $this->client->post('sms/json', [
-                    'form_params' => [
-                        'api_key' => (string) $this->config['key'],
-                        'api_secret' => (string) $this->config['secret'],
-                        'from' => (string) $this->config['from'],
-                        'to' => $to,
-                        'text' => $message->getText() ?? '',
-                    ],
-                ]);
+        return $this->sendEach(
+            $message,
+            fn (PendingRequest $request, string $to): mixed => $request->asForm()->post('https://rest.nexmo.com/sms/json', array_filter([
+                'api_key' => $this->value('key'),
+                'api_secret' => $this->value('secret'),
+                'from' => $this->sender($message),
+                'to' => ltrim($to, '+'),
+                'text' => $text,
+                'type' => $unicode ? 'unicode' : null,
+            ])),
+            function (Response $response, string $to): SentMessage {
+                $first = $response->json('messages.0');
 
-                $raw = $response->getBody()->getContents();
-                /** @var mixed $result */
-                $result = json_decode($raw, true);
+                if (! $response->successful() || ! is_array($first) || ($first['status'] ?? null) !== '0') {
+                    $error = is_array($first) && is_string($first['error-text'] ?? null) ? ': '.Str::limit($first['error-text'], 200) : '';
 
-                if (! is_array($result) || ! isset($result['messages']) || ! is_array($result['messages'])) {
-                    throw new RuntimeException('Failed to send SMS via Vonage: Invalid API response');
+                    throw new DeliveryException("Failed to send SMS via Vonage (HTTP {$response->status()}){$error}", 'Vonage', code: $response->status());
                 }
 
-                $first = $result['messages'][0] ?? null;
-                if (! is_array($first) || ($first['status'] ?? null) !== '0') {
-                    $errorText = is_array($first) && isset($first['error-text']) && is_string($first['error-text'])
-                        ? $first['error-text']
-                        : 'Unknown error';
-                    throw new RuntimeException("Failed to send SMS via Vonage: {$errorText}");
-                }
-            } catch (GuzzleException $e) {
-                throw new RuntimeException(
-                    "Failed to send SMS via Vonage: {$e->getMessage()}",
-                    0,
-                    $e
-                );
-            }
-        }
+                return new SentMessage($to, is_string($first['message-id'] ?? null) ? $first['message-id'] : null, 'accepted');
+            },
+        );
+    }
 
-        return true;
+    /**
+     * Whether the text fits the GSM 03.38 basic character set (otherwise send as Unicode).
+     */
+    private static function isGsm(string $text): bool
+    {
+        return preg_match('/[^\x00-\x7F£¥èéùìòÇØøÅåΔΦΓΛΩΠΨΣΘΞÆæßÉ¤¡ÄÖÑÜ§¿äöñüà€]/u', $text) === 0;
     }
 }

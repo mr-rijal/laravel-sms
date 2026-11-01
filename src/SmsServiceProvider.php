@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace MrRijal\LaravelSms;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\ServiceProvider;
+use MrRijal\LaravelSms\Console\SendTestSmsCommand;
+use MrRijal\LaravelSms\Contracts\Factory;
 use MrRijal\LaravelSms\Notifications\SmsChannel;
 
 class SmsServiceProvider extends ServiceProvider
@@ -15,10 +18,11 @@ class SmsServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sms.php', 'sms');
 
-        // Scoped: the fluent builder holds per-message state, so Octane requests
-        // and queue jobs each get a fresh manager instead of a shared singleton.
-        $this->app->scoped(SmsManager::class, fn (): SmsManager => new SmsManager);
-        $this->app->alias(SmsManager::class, 'laravel-sms');
+        // A singleton, so drivers registered with Sms::extend() survive Octane requests and queue jobs.
+        // Per-message state lives in PendingSms, never on the manager.
+        $this->app->singleton('laravel-sms', fn (Application $app): SmsManager => new SmsManager($app));
+        $this->app->alias('laravel-sms', SmsManager::class);
+        $this->app->alias('laravel-sms', Factory::class);
 
         $this->callAfterResolving(ChannelManager::class, function (ChannelManager $channels): void {
             $channels->extend('sms', fn (Application $app): SmsChannel => $app->make(SmsChannel::class));
@@ -31,15 +35,20 @@ class SmsServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../config/sms.php' => config_path('sms.php'),
             ], 'sms-config');
+
+            $this->commands([SendTestSmsCommand::class]);
+
+            if (class_exists(AboutCommand::class)) {
+                AboutCommand::add('Laravel SMS', fn (): array => [
+                    'Default provider' => $this->app->make(SmsManager::class)->getDefaultDriver(),
+                    'Queue' => filter_var(config('sms.queue'), FILTER_VALIDATE_BOOLEAN) ? 'enabled' : 'disabled',
+                    'Webhooks' => filter_var(config('sms.webhooks.enabled'), FILTER_VALIDATE_BOOLEAN) ? 'enabled' : 'disabled',
+                ]);
+            }
         }
 
         if (filter_var(config('sms.webhooks.enabled', false), FILTER_VALIDATE_BOOLEAN)) {
-            $this->loadWebhookRoutes();
+            $this->loadRoutesFrom(__DIR__.'/../routes/webhook.php');
         }
-    }
-
-    protected function loadWebhookRoutes(): void
-    {
-        $this->loadRoutesFrom(__DIR__.'/../routes/webhook.php');
     }
 }

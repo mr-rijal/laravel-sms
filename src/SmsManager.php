@@ -4,324 +4,255 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms;
 
+use Closure;
+use DateInterval;
 use DateTimeInterface;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Traits\Macroable;
-use InvalidArgumentException;
+use MrRijal\LaravelSms\Contracts\Factory;
 use MrRijal\LaravelSms\Contracts\SmsProvider;
+use MrRijal\LaravelSms\Events\SmsFailed;
 use MrRijal\LaravelSms\Events\SmsSending;
 use MrRijal\LaravelSms\Events\SmsSent;
+use MrRijal\LaravelSms\Exceptions\InvalidConfigurationException;
 use MrRijal\LaravelSms\Jobs\SendSmsJob;
 use Throwable;
 
-class SmsManager
+class SmsManager implements Factory
 {
     use Macroable;
 
     /**
      * @var array<string, SmsProvider>
      */
-    protected array $driverCache = [];
-
-    protected SmsMessage $message;
-
-    protected string $provider = '';
-
-    public function __construct()
-    {
-        $this->reset();
-    }
-
-    protected function reset(): void
-    {
-        $this->message = new SmsMessage;
-        $default = config('sms.default', 'fake');
-        $this->provider = is_string($default) ? $default : 'fake';
-    }
-
-    public function provider(string $provider): self
-    {
-        $this->provider = $provider;
-
-        return $this;
-    }
+    protected array $drivers = [];
 
     /**
-     * @param  string|list<string>  $numbers
+     * @var array<string, Closure(Container, array<string, mixed>): SmsProvider>
      */
-    public function to(string|array $numbers): self
-    {
-        $this->message->to($numbers);
+    protected array $customCreators = [];
 
-        return $this;
+    public function __construct(
+        protected Container $container,
+    ) {}
+
+    /**
+     * @param  string|iterable<string>  $numbers
+     */
+    public function to(string|iterable $numbers): PendingSms
+    {
+        return $this->compose()->to($numbers);
     }
 
-    public function message(string $text): self
+    public function provider(string $provider): PendingSms
     {
-        $this->message->message($text);
+        return $this->compose()->provider($provider);
+    }
 
-        return $this;
+    public function message(string $text): PendingSms
+    {
+        return $this->compose()->message($text);
     }
 
     /**
      * @param  array<string, mixed>  $vars
      */
-    public function template(string $templateId, array $vars = []): self
+    public function template(string $templateId, array $vars = []): PendingSms
     {
-        $this->message->template($templateId, $vars);
+        return $this->compose()->template($templateId, $vars);
+    }
+
+    public function compose(?SmsMessage $message = null): PendingSms
+    {
+        return new PendingSms($this, $message);
+    }
+
+    /**
+     * Send immediately, or queue when `sms.queue` is enabled (then returns null).
+     */
+    public function send(SmsMessage $message): ?SmsResult
+    {
+        if (filter_var(config('sms.queue', false), FILTER_VALIDATE_BOOLEAN)) {
+            $this->queue($message);
+
+            return null;
+        }
+
+        return $this->sendNow($message);
+    }
+
+    public function sendNow(SmsMessage $message): ?SmsResult
+    {
+        $message->validate();
+
+        $provider = $this->resolveProviderName($message->getProvider());
+
+        if ($this->events()->until(new SmsSending($message, $provider)) === false) {
+            return null;
+        }
+
+        try {
+            $result = $this->driver($provider)->send($message)->withProvider($provider);
+        } catch (Throwable $e) {
+            Log::error('SMS sending failed', [
+                'provider' => $provider,
+                'recipients' => $message->getRedactedRecipientsForLogging(),
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->events()->dispatch(new SmsFailed($message, $provider, $e));
+
+            throw $e;
+        }
+
+        // The provider has accepted the message: a failing listener must not make the caller
+        // (or a queued job) think the send failed and send it again.
+        try {
+            $this->events()->dispatch(new SmsSent($message, $provider, $result));
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Queue one job per recipient, so a retry only resends to the recipient that failed.
+     */
+    public function queue(SmsMessage $message, DateTimeInterface|DateInterval|int|null $delay = null): void
+    {
+        $message->validate();
+
+        foreach ($message->getTo() as $recipient) {
+            $job = new SendSmsJob($message->forRecipient($recipient));
+
+            $connection = config('sms.queue_connection');
+            if (is_string($connection) && $connection !== '') {
+                $job->onConnection($connection);
+            }
+
+            $queue = config('sms.queue_name');
+            if (is_string($queue) && $queue !== '') {
+                $job->onQueue($queue);
+            }
+
+            if ($delay !== null) {
+                $job->delay($delay);
+            }
+
+            dispatch($job);
+        }
+    }
+
+    /**
+     * Resolve a driver instance by name (the default provider when null).
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function driver(?string $name = null): SmsProvider
+    {
+        $name = $this->resolveProviderName($name);
+
+        return $this->drivers[$name] ??= $this->createDriver($name);
+    }
+
+    /**
+     * Register a custom driver: Sms::extend('acme', fn ($app, array $config) => new AcmeDriver($config)).
+     *
+     * @param  Closure(Container, array<string, mixed>): SmsProvider  $callback
+     */
+    public function extend(string $name, Closure $callback): static
+    {
+        $this->customCreators[$name] = $callback;
+        unset($this->drivers[$name]);
 
         return $this;
     }
 
     /**
-     * @throws InvalidArgumentException
-     * @throws Throwable
+     * Copy custom driver registrations from another manager (used by Sms::fake()).
      */
-    public function sendNow(): bool
+    public function inheritCustomCreators(self $manager): static
     {
-        try {
-            $this->message->validate();
+        $this->customCreators = [...$manager->customCreators, ...$this->customCreators];
 
-            Log::info('Sending SMS', [
-                'provider' => $this->provider,
-                'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                'template_id' => $this->message->getTemplateId(),
-            ]);
+        return $this;
+    }
 
-            Event::dispatch(new SmsSending($this->message, $this->provider));
+    public function getDefaultDriver(): string
+    {
+        $default = config('sms.default', 'log');
 
-            try {
-                $driver = $this->resolveDriver();
-                $result = $driver->send($this->message);
-
-                Event::dispatch(new SmsSent($this->message, $this->provider, true));
-
-                Log::info('SMS sent successfully', [
-                    'provider' => $this->provider,
-                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                    'template_id' => $this->message->getTemplateId(),
-                ]);
-
-                return $result;
-            } catch (Throwable $e) {
-                Log::error('SMS sending failed', [
-                    'provider' => $this->provider,
-                    'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                    'template_id' => $this->message->getTemplateId(),
-                    'error' => $e->getMessage(),
-                ]);
-
-                Event::dispatch(new SmsSent($this->message, $this->provider, false, $e->getMessage()));
-
-                throw $e;
-            }
-        } finally {
-            $this->reset();
-        }
+        return is_string($default) && $default !== '' ? $default : 'log';
     }
 
     /**
-     * Queue the message as one job per recipient, so a retry only resends to the recipient that failed.
-     *
-     * @throws InvalidArgumentException
+     * Drop cached driver instances (e.g. after changing config at runtime).
      */
-    public function sendLater(): void
+    public function forgetDrivers(): static
     {
-        $this->queue();
+        $this->drivers = [];
+
+        return $this;
     }
 
     /**
-     * @throws InvalidArgumentException
-     * @throws Throwable
+     * @throws InvalidConfigurationException
      */
-    public function sendMessage(SmsMessage $message, string $provider): void
+    protected function resolveProviderName(?string $name): string
     {
-        $this->message = $message;
-        $this->provider = $provider;
-        $this->sendNow();
+        $name ??= $this->getDefaultDriver();
+
+        if ($name !== 'random') {
+            return $name;
+        }
+
+        $pool = array_values(array_filter((array) config('sms.random_drivers', []), fn (mixed $driver): bool => is_string($driver) && $driver !== ''));
+
+        if ($pool === []) {
+            throw new InvalidConfigurationException('No drivers configured for random selection');
+        }
+
+        /** @var list<string> $pool */
+        return $pool[array_rand($pool)];
     }
 
     /**
-     * Schedule the message as one job per recipient (see sendLater()).
-     *
-     * @throws InvalidArgumentException
+     * @throws InvalidConfigurationException
      */
-    public function sendLaterAt(DateTimeInterface $datetime): void
-    {
-        $this->queue($datetime);
-    }
-
-    /**
-     * @throws InvalidArgumentException
-     */
-    protected function queue(?DateTimeInterface $delay = null): void
-    {
-        try {
-            $this->message->validate();
-
-            foreach ($this->message->getTo() as $recipient) {
-                $pending = dispatch($this->makeJob($this->message->forRecipient($recipient), $this->provider));
-
-                if ($delay !== null) {
-                    $pending->delay($delay);
-                }
-            }
-
-            Log::info($delay === null ? 'SMS queued' : 'SMS scheduled', array_filter([
-                'provider' => $this->provider,
-                'recipients' => $this->message->getRedactedRecipientsForLogging(),
-                'template_id' => $this->message->getTemplateId(),
-                'scheduled_at' => $delay?->format('Y-m-d H:i:s'),
-            ], fn (mixed $value): bool => $value !== null));
-        } finally {
-            $this->reset();
-        }
-    }
-
-    /**
-     * @throws InvalidArgumentException
-     * @throws Throwable
-     */
-    public function send(): bool
-    {
-        if (filter_var(config('sms.queue', false), FILTER_VALIDATE_BOOLEAN)) {
-            $this->sendLater();
-
-            return true;
-        }
-
-        return $this->sendNow();
-    }
-
-    protected function makeJob(SmsMessage $message, string $provider): SendSmsJob
-    {
-        $job = new SendSmsJob($message, $provider);
-
-        $connection = config('sms.queue_connection');
-        if (is_string($connection) && $connection !== '') {
-            $job->onConnection($connection);
-        }
-
-        $queue = config('sms.queue_name');
-        if (is_string($queue) && $queue !== '') {
-            $job->onQueue($queue);
-        }
-
-        return $job;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function randomDriverNames(): array
-    {
-        $raw = config('sms.random_drivers', []);
-        if (! is_array($raw)) {
-            throw new InvalidArgumentException('sms.random_drivers must be an array.');
-        }
-
-        $names = [];
-        foreach ($raw as $name) {
-            if (is_string($name) && $name !== '') {
-                $names[] = $name;
-            }
-        }
-
-        return $names;
-    }
-
-    /**
-     * @return array<string, array<string, mixed>|class-string>
-     */
-    private function driverMap(): array
-    {
-        $drivers = config('sms.drivers', []);
-        if (! is_array($drivers)) {
-            throw new InvalidArgumentException('sms.drivers must be an array.');
-        }
-
-        /** @var array<string, array<string, mixed>|class-string> $drivers */
-        return $drivers;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function providerConfig(string $name): array
+    protected function createDriver(string $name): SmsProvider
     {
         $config = config("sms.providers.{$name}", []);
+        /** @var array<string, mixed> $config */
+        $config = is_array($config) ? $config : [];
 
-        return is_array($config) ? $config : [];
+        if (isset($this->customCreators[$name])) {
+            return ($this->customCreators[$name])($this->container, $config);
+        }
+
+        $definition = config("sms.drivers.{$name}");
+
+        if (is_array($definition) && isset($definition['class'])) {
+            /** @var array<string, mixed> $definition */
+            $config = array_merge($config, $definition);
+            $definition = $definition['class'];
+        }
+
+        if (! is_string($definition)) {
+            throw new InvalidConfigurationException("SMS driver [{$name}] not configured.");
+        }
+
+        if (! is_subclass_of($definition, SmsProvider::class)) {
+            throw new InvalidConfigurationException("Driver class [{$definition}] must implement ".SmsProvider::class.'.');
+        }
+
+        return new $definition($config);
     }
 
-    /**
-     * @throws InvalidArgumentException
-     */
-    protected function pickDriver(): string
+    protected function events(): Dispatcher
     {
-        if ($this->provider === 'random') {
-            $drivers = $this->randomDriverNames();
-            if ($drivers === []) {
-                throw new InvalidArgumentException('No drivers configured for random selection');
-            }
-
-            $key = array_rand($drivers);
-
-            return $drivers[$key];
-        }
-
-        return $this->provider;
-    }
-
-    /**
-     * Resolve a configured driver instance by name (defaults to the current provider).
-     *
-     * @throws InvalidArgumentException
-     */
-    public function driver(?string $name = null): SmsProvider
-    {
-        return $this->resolveDriver($name);
-    }
-
-    /**
-     * @throws InvalidArgumentException
-     */
-    protected function resolveDriver(?string $name = null): SmsProvider
-    {
-        $actualProvider = $name ?? $this->pickDriver();
-
-        if (isset($this->driverCache[$actualProvider])) {
-            return $this->driverCache[$actualProvider];
-        }
-
-        $drivers = $this->driverMap();
-
-        if (! isset($drivers[$actualProvider])) {
-            throw new InvalidArgumentException("SMS driver [{$actualProvider}] not configured.");
-        }
-
-        $driverConfig = $drivers[$actualProvider];
-
-        if (is_string($driverConfig)) {
-            if (! is_subclass_of($driverConfig, SmsProvider::class)) {
-                throw new InvalidArgumentException("Driver class [{$driverConfig}] must implement ".SmsProvider::class.'.');
-            }
-
-            $driver = new $driverConfig($this->providerConfig($actualProvider));
-        } elseif (isset($driverConfig['class']) && is_string($driverConfig['class'])) {
-            $class = $driverConfig['class'];
-            if (! is_subclass_of($class, SmsProvider::class)) {
-                throw new InvalidArgumentException("Driver class [{$class}] must implement ".SmsProvider::class.'.');
-            }
-
-            $driver = new $class($driverConfig);
-        } else {
-            throw new InvalidArgumentException("Driver {$actualProvider} not implemented");
-        }
-
-        $this->driverCache[$actualProvider] = $driver;
-
-        return $driver;
+        return $this->container->make(Dispatcher::class);
     }
 }

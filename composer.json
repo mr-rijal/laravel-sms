@@ -1,19 +1,25 @@
 {
     "name": "mr-rijal/laravel-sms",
-    "description": "Unified, extensible SMS gateway for Laravel",
+    "description": "Unified, fast and secure SMS for Laravel: Twilio, Vonage, Sinch, Bird, Plivo, Telnyx, Infobip, ClickSend, Clickatell, Brevo, Bandwidth, SendPulse, AWS SNS, WhatsApp and more",
     "keywords": [
         "laravel",
         "sms",
         "notifications",
         "twilio",
         "vonage",
-        "whatsapp",
-        "aws-sns",
-        "telnyx",
+        "sinch",
+        "bird",
+        "messagebird",
         "plivo",
+        "telnyx",
         "infobip",
-        "termii",
-        "africastalking"
+        "clicksend",
+        "clickatell",
+        "brevo",
+        "bandwidth",
+        "sendpulse",
+        "whatsapp",
+        "aws-sns"
     ],
     "type": "library",
     "license": "MIT",
@@ -30,20 +36,24 @@
     },
     "require": {
         "php": "^8.2",
+        "illuminate/cache": "^11.0|^12.0|^13.0",
+        "illuminate/console": "^11.0|^12.0|^13.0",
         "illuminate/contracts": "^11.0|^12.0|^13.0",
         "illuminate/http": "^11.0|^12.0|^13.0",
         "illuminate/notifications": "^11.0|^12.0|^13.0",
         "illuminate/queue": "^11.0|^12.0|^13.0",
         "illuminate/routing": "^11.0|^12.0|^13.0",
-        "illuminate/support": "^11.0|^12.0|^13.0",
-        "guzzlehttp/guzzle": "^7.15.5|^8.0",
-        "aws/aws-sdk-php": "^3.394.6"
+        "illuminate/support": "^11.0|^12.0|^13.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^9.16|^10.12|^11.3",
-        "phpunit/phpunit": "^10.5|^11.5|^12.5|^13.4",
+        "aws/aws-sdk-php": "^3.394.6",
+        "larastan/larastan": "^3.13",
         "laravel/pint": "^1.24",
-        "larastan/larastan": "^3.13"
+        "orchestra/testbench": "^9.16|^10.12|^11.3",
+        "phpunit/phpunit": "^10.5|^11.5|^12.5|^13.4"
+    },
+    "suggest": {
+        "aws/aws-sdk-php": "Required for the AWS SNS driver (^3.394.6)."
     },
     "autoload": {
         "psr-4": {

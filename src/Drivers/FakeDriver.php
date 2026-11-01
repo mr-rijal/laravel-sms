@@ -4,35 +4,34 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\SmsMessage;
+use MrRijal\LaravelSms\SmsResult;
 
-class FakeDriver implements SmsProvider
+/**
+ * Records messages in memory without any network call. Prefer Sms::fake() in tests.
+ */
+class FakeDriver extends Driver
 {
+    protected string $label = 'Fake';
+
     /**
-     * @var list<array{to: list<string>, message: ?string, template: ?string, vars: array<string, mixed>}>
+     * @var list<array{to: list<string>, message: ?string, template: ?string, vars: array<string, mixed>, from: ?string}>
      */
     public static array $messages = [];
 
-    /**
-     * @param  array<string, mixed>  $config
-     */
-    public function __construct(array $config = [])
+    public function send(SmsMessage $message): SmsResult
     {
-        // Intentionally unused — matches driver constructor signature used by SmsManager.
-        unset($config);
-    }
+        $message->validate();
 
-    public function send(SmsMessage $message): bool
-    {
         self::$messages[] = [
             'to' => $message->getTo(),
             'message' => $message->getText(),
             'template' => $message->getTemplateId(),
             'vars' => $message->getVariables(),
+            'from' => $message->getFrom(),
         ];
 
-        return true;
+        return SmsResult::accepted($message->getTo(), 'fake-'.count(self::$messages), 'accepted');
     }
 
     public static function reset(): void

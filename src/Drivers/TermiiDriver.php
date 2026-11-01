@@ -4,93 +4,63 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use MrRijal\LaravelSms\Concerns\VerifiesWebhooks;
 use MrRijal\LaravelSms\Contracts\HandlesWebhooks;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
 use MrRijal\LaravelSms\Events\SmsWebhookReceived;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class TermiiDriver implements HandlesWebhooks, SmsProvider
+/**
+ * Termii (Nigeria). Config: api_key, sender_id, channel (generic|dnd|whatsapp), optional base_url.
+ */
+class TermiiDriver extends HttpDriver implements HandlesWebhooks
 {
     use VerifiesWebhooks;
 
-    private const CHANNELS = ['generic', 'dnd', 'whatsapp'];
+    protected string $label = 'Termii';
 
-    protected Client $client;
-
-    /**
-     * @param  array<string, mixed>  $config  api_key, sender_id, channel (generic|dnd|whatsapp), optional base_url
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['api_key']) || empty($config['sender_id'])) {
-            throw new InvalidArgumentException('Termii configuration is incomplete. Required: api_key, sender_id');
-        }
-
-        $channel = $config['channel'] ?? 'generic';
-        if (! is_string($channel) || ! in_array($channel, self::CHANNELS, true)) {
-            throw new InvalidArgumentException('Termii channel must be one of: '.implode(', ', self::CHANNELS).'.');
-        }
-
-        $baseUrl = $config['base_url'] ?? 'https://api.ng.termii.com/';
-        if (! is_string($baseUrl) || ! str_starts_with($baseUrl, 'https://')) {
-            throw new InvalidArgumentException('Termii base_url must use HTTPS.');
-        }
-
-        $this->client = $client ?? new Client([
-            'base_uri' => rtrim($baseUrl, '/').'/api/',
-            'timeout' => 30,
-            'connect_timeout' => 10,
-            'http_errors' => false,
-        ]);
-    }
-
-    public function send(SmsMessage $message): bool
+    protected function validateConfig(): void
     {
-        $body = trim((string) $message->getText());
-
-        if ($body === '') {
-            throw new InvalidArgumentException('Termii SMS requires a non-empty message body.');
-        }
-
-        foreach ($message->getTo() as $to) {
-            try {
-                $response = $this->client->post('sms/send', [
-                    'headers' => ['Accept' => 'application/json'],
-                    'json' => [
-                        'to' => ltrim($to, '+'),
-                        'from' => (string) $this->config['sender_id'],
-                        'sms' => $body,
-                        'type' => 'plain',
-                        'channel' => (string) ($this->config['channel'] ?? 'generic'),
-                        // Termii authenticates with the API key in the request body.
-                        'api_key' => (string) $this->config['api_key'],
-                    ],
-                ]);
-            } catch (GuzzleException $e) {
-                throw new RuntimeException('Failed to send SMS via Termii (transport error).', 0, $e);
-            }
-
-            $this->assertTermiiSuccess($response);
-        }
-
-        return true;
+        $this->require('api_key', 'sender_id');
+        $this->oneOf('channel', ['generic', 'dnd', 'whatsapp'], 'generic');
+        $this->httpsUrl('base_url', 'https://api.ng.termii.com');
     }
 
-    public function handleWebhook(Request $request): Response
+    public function send(SmsMessage $message): SmsResult
+    {
+        $text = $this->text($message);
+
+        return $this->sendEach(
+            $message,
+            fn (PendingRequest $request, string $to): mixed => $request->post($this->httpsUrl('base_url', 'https://api.ng.termii.com').'/api/sms/send', [
+                'to' => ltrim($to, '+'),
+                'from' => $this->sender($message, 'sender_id'),
+                'sms' => $text,
+                'type' => 'plain',
+                'channel' => $this->oneOf('channel', ['generic', 'dnd', 'whatsapp'], 'generic'),
+                // Termii authenticates with the API key in the request body.
+                'api_key' => $this->value('api_key'),
+            ]),
+            function (Response $response, string $to): SentMessage {
+                $code = $response->json('code');
+
+                if ($response->status() !== 200 || ($code !== null && $code !== 'ok')) {
+                    $this->fail($response, 'message');
+                }
+
+                return new SentMessage($to, $this->jsonString($response, 'message_id'), 'accepted');
+            },
+        );
+    }
+
+    public function handleWebhook(Request $request): HttpResponse
     {
         if (! $this->hasValidHmacSignature($request, 'termii', 'X-Termii-Signature', 'sha512')) {
             $this->logRejectedWebhook($request, 'termii');
@@ -117,22 +87,5 @@ class TermiiDriver implements HandlesWebhooks, SmsProvider
         ]);
 
         return response('OK', 200);
-    }
-
-    private function assertTermiiSuccess(ResponseInterface $response): void
-    {
-        $statusCode = $response->getStatusCode();
-        /** @var mixed $body */
-        $body = json_decode((string) $response->getBody(), true);
-
-        if ($statusCode === 200 && ! (is_array($body) && isset($body['code']) && $body['code'] !== 'ok')) {
-            return;
-        }
-
-        $detail = is_array($body) && isset($body['message']) && is_string($body['message'])
-            ? ': '.Str::limit($body['message'], 200)
-            : '';
-
-        throw new RuntimeException("Failed to send SMS via Termii (HTTP {$statusCode}){$detail}", $statusCode);
     }
 }

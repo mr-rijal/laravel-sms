@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms;
 
+use MrRijal\LaravelSms\Exceptions\InvalidMessageException;
+
 class SmsMessage
 {
+    public const MAX_LENGTH = 1600;
+
     /**
      * @var list<string>
      */
@@ -20,55 +24,58 @@ class SmsMessage
      */
     private array $variables = [];
 
-    /**
-     * Add recipient(s).
-     *
-     * @param  string|list<string>  $numbers  Phone number(s)
-     *
-     * @throws \InvalidArgumentException
-     */
-    public function to(string|array $numbers): self
-    {
-        /** @var list<string> $raw */
-        $raw = is_array($numbers) ? $numbers : [$numbers];
+    private ?string $from = null;
 
-        $validated = [];
-        foreach ($raw as $number) {
-            $number = trim((string) $number);
-            if ($number === '') {
+    private ?string $provider = null;
+
+    public static function create(?string $text = null): self
+    {
+        $message = new self;
+
+        return $text === null ? $message : $message->message($text);
+    }
+
+    /**
+     * Add recipient(s). Spaces, dashes, dots and parentheses are stripped before validation.
+     *
+     * @param  string|iterable<string>  $numbers
+     *
+     * @throws InvalidMessageException
+     */
+    public function to(string|iterable $numbers): self
+    {
+        foreach (is_string($numbers) ? [$numbers] : $numbers as $number) {
+            $normalized = self::normalize((string) $number);
+
+            if ($normalized === '') {
                 continue;
             }
 
-            // Basic phone validation (E.164-ish — allows various formats).
-            if (! preg_match('/^\+?\d{7,15}$/', $number)) {
-                throw new \InvalidArgumentException("Invalid phone number format: {$number}");
+            if (! preg_match('/^\+?\d{7,15}$/', $normalized)) {
+                throw new InvalidMessageException("Invalid phone number format: {$number}");
             }
 
-            $validated[] = $number;
+            if (! in_array($normalized, $this->to, true)) {
+                $this->to[] = $normalized;
+            }
         }
-
-        /** @var list<string> $unique */
-        $unique = array_values(array_unique(array_merge($this->to, $validated)));
-        $this->to = $unique;
 
         return $this;
     }
 
     /**
-     * Set message text.
-     *
-     * @throws \InvalidArgumentException
+     * @throws InvalidMessageException
      */
     public function message(string $text): self
     {
         $text = trim($text);
 
         if ($text === '') {
-            throw new \InvalidArgumentException('Message text cannot be empty');
+            throw new InvalidMessageException('Message text cannot be empty');
         }
 
-        if (strlen($text) > 1600) {
-            throw new \InvalidArgumentException('SMS message cannot exceed 1600 characters');
+        if (mb_strlen($text) > self::MAX_LENGTH) {
+            throw new InvalidMessageException('SMS message cannot exceed '.self::MAX_LENGTH.' characters');
         }
 
         $this->text = $text;
@@ -77,20 +84,46 @@ class SmsMessage
     }
 
     /**
-     * Set template ID and variables.
-     *
+     * Alias of message(), matching Laravel's notification message style.
+     */
+    public function content(string $text): self
+    {
+        return $this->message($text);
+    }
+
+    /**
      * @param  array<string, mixed>  $vars
      *
-     * @throws \InvalidArgumentException
+     * @throws InvalidMessageException
      */
     public function template(string $templateId, array $vars = []): self
     {
-        if ($templateId === '') {
-            throw new \InvalidArgumentException('Template ID cannot be empty');
+        if (trim($templateId) === '') {
+            throw new InvalidMessageException('Template ID cannot be empty');
         }
 
-        $this->templateId = $templateId;
+        $this->templateId = trim($templateId);
         $this->variables = $vars;
+
+        return $this;
+    }
+
+    /**
+     * Override the configured sender for this message (drivers that support it).
+     */
+    public function from(?string $sender): self
+    {
+        $this->from = $sender === null || trim($sender) === '' ? null : trim($sender);
+
+        return $this;
+    }
+
+    /**
+     * Send this message through a specific provider instead of the default.
+     */
+    public function provider(?string $provider): self
+    {
+        $this->provider = $provider;
 
         return $this;
     }
@@ -104,6 +137,19 @@ class SmsMessage
         $copy->to = [];
 
         return $copy->to($number);
+    }
+
+    /**
+     * Copy of this message addressed to the given recipients only.
+     *
+     * @param  list<string>  $numbers
+     */
+    public function forRecipients(array $numbers): self
+    {
+        $copy = clone $this;
+        $copy->to = [];
+
+        return $copy->to($numbers);
     }
 
     /**
@@ -132,42 +178,54 @@ class SmsMessage
         return $this->variables;
     }
 
+    public function getFrom(): ?string
+    {
+        return $this->from;
+    }
+
+    public function getProvider(): ?string
+    {
+        return $this->provider;
+    }
+
+    public function hasRecipients(): bool
+    {
+        return $this->to !== [];
+    }
+
     /**
-     * Recipient numbers redacted for logging (PII-safe; last 4 digits visible when possible).
+     * Recipients with all but the last four digits masked, for logs.
      *
      * @return list<string>
      */
     public function getRedactedRecipientsForLogging(): array
     {
-        return array_map(fn (string $number): string => self::redactPhoneNumber($number), $this->getTo());
+        return array_map(self::redact(...), $this->to);
     }
 
-    /**
-     * Redact a phone number for logs: masks all but the last four digits.
-     */
-    private static function redactPhoneNumber(string $number): string
+    public static function redact(string $number): string
     {
-        $digits = preg_replace('/\D/', '', $number);
-        if ($digits === null || $digits === '' || strlen($digits) < 4) {
-            return '***';
-        }
+        $digits = preg_replace('/\D/', '', $number) ?? '';
 
-        return '***'.substr($digits, -4);
+        return strlen($digits) < 4 ? '***' : '***'.substr($digits, -4);
     }
 
     /**
-     * Validate message is ready to send.
-     *
-     * @throws \InvalidArgumentException
+     * @throws InvalidMessageException
      */
     public function validate(): void
     {
         if ($this->to === []) {
-            throw new \InvalidArgumentException('At least one recipient is required');
+            throw new InvalidMessageException('At least one recipient is required');
         }
 
         if ($this->text === null && $this->templateId === null) {
-            throw new \InvalidArgumentException('Message text or template ID is required');
+            throw new InvalidMessageException('Message text or template ID is required');
         }
+    }
+
+    private static function normalize(string $number): string
+    {
+        return preg_replace('/[\s\-.()]/', '', trim($number)) ?? '';
     }
 }

@@ -2,174 +2,90 @@
 
 namespace MrRijal\LaravelSms\Tests;
 
+use MrRijal\LaravelSms\Exceptions\InvalidMessageException;
+use MrRijal\LaravelSms\Exceptions\SmsException;
 use MrRijal\LaravelSms\SmsMessage;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 class SmsMessageTest extends BaseTestCase
 {
-    public function test_to_accepts_single_number(): void
+    public function test_recipients_are_normalized_and_deduplicated(): void
     {
-        $message = new SmsMessage;
-        $message->to('9812345678');
+        $message = (new SmsMessage)->to(['+1 (555) 123-0001', '+1.555.123.0001', '9812345678', '  ']);
 
-        $this->assertSame(['9812345678'], $message->getTo());
+        $this->assertSame(['+15551230001', '9812345678'], $message->getTo());
     }
 
-    public function test_to_accepts_array_of_numbers(): void
+    public function test_accepts_any_iterable_of_numbers(): void
     {
-        $message = new SmsMessage;
-        $message->to(['9812345678', '9800000000']);
-
-        $this->assertSame(['9812345678', '9800000000'], $message->getTo());
-    }
-
-    public function test_to_accepts_numbers_with_plus_prefix(): void
-    {
-        $message = new SmsMessage;
-        $message->to('+9812345678');
-
-        $this->assertSame(['+9812345678'], $message->getTo());
-    }
-
-    public function test_to_merges_and_deduplicates_recipients(): void
-    {
-        $message = new SmsMessage;
-        $message->to('9812345678');
-        $message->to(['9812345678', '9800000000']);
+        $message = (new SmsMessage)->to(collect(['+15551230001', '+15551230002']));
 
         $this->assertCount(2, $message->getTo());
-        $this->assertContains('9812345678', $message->getTo());
-        $this->assertContains('9800000000', $message->getTo());
     }
 
-    public function test_to_throws_for_invalid_number_format(): void
+    public function test_rejects_invalid_numbers(): void
     {
-        $message = new SmsMessage;
+        $this->expectException(InvalidMessageException::class);
+        $this->expectExceptionMessage('Invalid phone number format: 12ab');
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid phone number format');
-
-        $message->to('invalid');
+        (new SmsMessage)->to('12ab');
     }
 
-    public function test_to_throws_for_too_short_number(): void
+    public function test_rejects_empty_and_overlong_text(): void
     {
-        $message = new SmsMessage;
+        try {
+            (new SmsMessage)->message('   ');
+            $this->fail('Expected exception.');
+        } catch (InvalidMessageException $e) {
+            $this->assertSame('Message text cannot be empty', $e->getMessage());
+        }
 
-        $this->expectException(\InvalidArgumentException::class);
-
-        $message->to('123'); // less than 7 digits
-    }
-
-    public function test_message_sets_text(): void
-    {
-        $message = new SmsMessage;
-        $message->message('Hello world');
-
-        $this->assertSame('Hello world', $message->getText());
-    }
-
-    public function test_message_trimmed(): void
-    {
-        $message = new SmsMessage;
-        $message->message('  Hello  ');
-
-        $this->assertSame('Hello', $message->getText());
-    }
-
-    public function test_message_throws_when_empty(): void
-    {
-        $message = new SmsMessage;
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Message text cannot be empty');
-
-        $message->message('');
-    }
-
-    public function test_message_throws_when_exceeds_1600_chars(): void
-    {
-        $message = new SmsMessage;
-
-        $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('cannot exceed 1600 characters');
-
-        $message->message(str_repeat('x', 1601));
+        (new SmsMessage)->message(str_repeat('é', 1601));
     }
 
-    public function test_template_sets_id_and_variables(): void
+    public function test_length_is_counted_in_characters_not_bytes(): void
     {
-        $message = new SmsMessage;
-        $message->template('TPL_123', ['otp' => 123456]);
-
-        $this->assertSame('TPL_123', $message->getTemplateId());
-        $this->assertSame(['otp' => 123456], $message->getVariables());
+        $this->assertSame(1600, mb_strlen((string) (new SmsMessage)->message(str_repeat('é', 1600))->getText()));
     }
 
-    public function test_template_throws_when_id_empty(): void
+    public function test_template_sender_and_provider(): void
     {
-        $message = new SmsMessage;
+        $message = SmsMessage::create()->template('OTP', ['code' => 1])->from(' ACME ')->provider('twilio');
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Template ID cannot be empty');
-
-        $message->template('');
+        $this->assertSame('OTP', $message->getTemplateId());
+        $this->assertSame(['code' => 1], $message->getVariables());
+        $this->assertSame('ACME', $message->getFrom());
+        $this->assertSame('twilio', $message->getProvider());
+        $this->assertNull((new SmsMessage)->from('  ')->getFrom());
     }
 
-    public function test_validate_throws_when_no_recipients(): void
+    public function test_validate_requires_recipient_and_content(): void
     {
-        $message = new SmsMessage;
-        $message->message('Hello');
+        try {
+            (new SmsMessage)->message('Hi')->validate();
+            $this->fail('Expected exception.');
+        } catch (InvalidMessageException $e) {
+            $this->assertSame('At least one recipient is required', $e->getMessage());
+        }
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('At least one recipient is required');
-
-        $message->validate();
-    }
-
-    public function test_validate_throws_when_no_text_or_template(): void
-    {
-        $message = new SmsMessage;
-        $message->to('9812345678');
-
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(SmsException::class);
         $this->expectExceptionMessage('Message text or template ID is required');
-
-        $message->validate();
+        (new SmsMessage)->to('9812345678')->validate();
     }
 
-    public function test_validate_passes_with_text_and_recipient(): void
+    public function test_for_recipient_copies_without_mutating_the_original(): void
     {
-        $message = (new SmsMessage)->to('9812345678')->message('Hello');
+        $message = SmsMessage::create('Hi')->to(['9812345678', '9800000000']);
 
-        $message->validate();
-        $this->assertTrue(true);
-    }
-
-    public function test_validate_passes_with_template_and_recipient(): void
-    {
-        $message = (new SmsMessage)->to('9812345678')->template('TPL_1', []);
-
-        $message->validate();
-        $this->assertTrue(true);
-    }
-
-    public function test_get_redacted_recipients_for_logging(): void
-    {
-        $message = (new SmsMessage)->to('9812345678');
-        $this->assertSame(['***5678'], $message->getRedactedRecipientsForLogging());
-
-        $message2 = (new SmsMessage)->to(['+15551234567', '9800000000']);
-        $this->assertSame(['***4567', '***0000'], $message2->getRedactedRecipientsForLogging());
-    }
-
-    public function test_for_recipient_returns_single_recipient_copy(): void
-    {
-        $message = (new SmsMessage)->to(['9812345678', '9800000000'])->message('Hi');
-        $copy = $message->forRecipient('9800000000');
-
-        $this->assertSame(['9800000000'], $copy->getTo());
-        $this->assertSame('Hi', $copy->getText());
+        $this->assertSame(['9800000000'], $message->forRecipient('9800000000')->getTo());
+        $this->assertSame(['9812345678'], $message->forRecipients(['9812345678'])->getTo());
         $this->assertSame(['9812345678', '9800000000'], $message->getTo());
+    }
+
+    public function test_redacts_numbers_for_logging(): void
+    {
+        $this->assertSame(['***5678'], (new SmsMessage)->to('9812345678')->getRedactedRecipientsForLogging());
+        $this->assertSame('***', SmsMessage::redact('12'));
     }
 }

@@ -4,78 +4,53 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class PlivoDriver implements SmsProvider
+/**
+ * Plivo. One request for all recipients. Config: auth_id, auth_token, from, optional log.
+ */
+class PlivoDriver extends HttpDriver
 {
-    protected Client $client;
+    protected string $label = 'Plivo';
 
-    /**
-     * @param  array<string, mixed>  $config  auth_id, auth_token, from, optional log
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['auth_id']) || empty($config['auth_token']) || empty($config['from'])) {
-            throw new InvalidArgumentException('Plivo configuration is incomplete. auth_id, auth_token, and from are required.');
-        }
-
-        $authId = rawurlencode((string) $config['auth_id']);
-        $this->client = $client ?? new Client([
-            'base_uri' => "https://api.plivo.com/v1/Account/{$authId}/",
-            'timeout' => 30,
-            'connect_timeout' => 10,
-            'http_errors' => false,
-        ]);
+    protected function validateConfig(): void
+    {
+        $this->require('auth_id', 'auth_token', 'from');
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        $message->validate();
-        $text = $message->getText();
-        if ($text === null) {
-            throw new InvalidArgumentException('Plivo SMS requires message text; template-only messages are not supported.');
-        }
+        $text = $this->text($message);
+        $authId = rawurlencode($this->value('auth_id'));
 
-        try {
-            $response = $this->client->post('Message/', [
-                'auth' => [(string) $this->config['auth_id'], (string) $this->config['auth_token']],
-                'json' => [
-                    'src' => (string) $this->config['from'],
+        return $this->sendOnce(
+            $message,
+            fn (PendingRequest $request): Response => $request
+                ->withBasicAuth($this->value('auth_id'), $this->value('auth_token'))
+                ->post("https://api.plivo.com/v1/Account/{$authId}/Message/", [
+                    'src' => $this->sender($message),
                     'dst' => implode('<', $message->getTo()),
                     'text' => $text,
                     'type' => 'sms',
-                    'log' => filter_var($this->config['log'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                ],
-            ]);
+                    'log' => $this->bool('log'),
+                ]),
+            function (Response $response) use ($message): SmsResult {
+                $ids = $response->json('message_uuid');
 
-            $this->assertSuccessfulResponse($response->getStatusCode(), (string) $response->getBody());
-        } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to send SMS via Plivo.', 0, $e);
-        }
+                if ($response->status() !== 202 || ! is_array($ids)) {
+                    $this->fail($response, 'error');
+                }
 
-        return true;
-    }
-
-    private function assertSuccessfulResponse(int $statusCode, string $raw): void
-    {
-        /** @var mixed $body */
-        $body = json_decode($raw, true);
-
-        if ($statusCode !== 202 || ! is_array($body) || ! isset($body['message_uuid']) || ! is_array($body['message_uuid'])) {
-            $detail = is_array($body) && isset($body['error']) && is_string($body['error']) && $body['error'] !== ''
-                ? ': '.Str::limit($body['error'], 200)
-                : '';
-
-            throw new RuntimeException("Failed to send SMS via Plivo (HTTP {$statusCode}){$detail}.");
-        }
+                return new SmsResult(array_map(
+                    fn (string $to, int $i): SentMessage => new SentMessage($to, is_string($ids[$i] ?? null) ? $ids[$i] : null, 'queued'),
+                    $message->getTo(),
+                    array_keys($message->getTo()),
+                ));
+            },
+        );
     }
 }

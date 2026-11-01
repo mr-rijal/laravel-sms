@@ -4,95 +4,57 @@ declare(strict_types=1);
 
 namespace MrRijal\LaravelSms\Drivers;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
-use MrRijal\LaravelSms\Contracts\SmsProvider;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use MrRijal\LaravelSms\SentMessage;
 use MrRijal\LaravelSms\SmsMessage;
-use RuntimeException;
+use MrRijal\LaravelSms\SmsResult;
 
-class InfobipDriver implements SmsProvider
+/**
+ * Infobip SMS API v3. One request for all recipients. Config: api_key, sender, base_url (your account's HTTPS base URL).
+ */
+class InfobipDriver extends HttpDriver
 {
-    protected Client $client;
+    protected string $label = 'Infobip';
 
-    /**
-     * @param  array<string, mixed>  $config  api_key, sender, optional base_url
-     */
-    public function __construct(
-        #[\SensitiveParameter]
-        protected array $config,
-        ?Client $client = null,
-    ) {
-        if (empty($config['api_key']) || empty($config['sender'])) {
-            throw new InvalidArgumentException('Infobip configuration is incomplete. api_key and sender are required.');
-        }
-
-        $baseUrl = $config['base_url'] ?? 'https://api.infobip.com/';
-        if (! is_string($baseUrl) || ! str_starts_with($baseUrl, 'https://')) {
-            throw new InvalidArgumentException('Infobip base_url must use HTTPS.');
-        }
-
-        $this->client = $client ?? new Client([
-            'base_uri' => rtrim($baseUrl, '/').'/',
-            'timeout' => 30,
-            'connect_timeout' => 10,
-            'http_errors' => false,
-        ]);
+    protected function validateConfig(): void
+    {
+        $this->require('api_key', 'sender');
+        $this->httpsUrl('base_url', 'https://api.infobip.com');
     }
 
-    public function send(SmsMessage $message): bool
+    public function send(SmsMessage $message): SmsResult
     {
-        $message->validate();
-        $text = $message->getText();
-        if ($text === null) {
-            throw new InvalidArgumentException('Infobip SMS requires message text; template-only messages are not supported.');
-        }
+        $text = $this->text($message);
 
-        try {
-            $response = $this->client->post('sms/3/messages', [
-                'headers' => [
-                    'Authorization' => 'App '.(string) $this->config['api_key'],
-                    'Accept' => 'application/json',
-                ],
-                'json' => [
+        return $this->sendOnce(
+            $message,
+            fn (PendingRequest $request): Response => $request
+                ->withHeaders(['Authorization' => 'App '.$this->value('api_key')])
+                ->post($this->httpsUrl('base_url', 'https://api.infobip.com').'/sms/3/messages', [
                     'messages' => [[
-                        'sender' => (string) $this->config['sender'],
-                        'destinations' => array_map(fn (string $to): array => ['to' => $to], $message->getTo()),
+                        'sender' => $this->sender($message, 'sender'),
+                        'destinations' => array_map(fn (string $to): array => ['to' => ltrim($to, '+')], $message->getTo()),
                         'content' => ['text' => $text],
                     ]],
-                ],
-            ]);
+                ]),
+            function (Response $response) use ($message): SmsResult {
+                $messages = $response->json('messages');
 
-            $this->assertSuccessfulResponse($response->getStatusCode(), (string) $response->getBody());
-        } catch (GuzzleException $e) {
-            throw new RuntimeException('Failed to send SMS via Infobip.', 0, $e);
-        }
+                if (! $response->successful() || ! is_array($messages) || $messages === []) {
+                    $this->fail($response, ['description', 'requestError.serviceException.text']);
+                }
 
-        return true;
-    }
+                return new SmsResult(array_map(function (string $to, int $i) use ($messages): SentMessage {
+                    $item = is_array($messages[$i] ?? null) ? $messages[$i] : [];
 
-    private function assertSuccessfulResponse(int $statusCode, string $raw): void
-    {
-        /** @var mixed $body */
-        $body = json_decode($raw, true);
-
-        if ($statusCode !== 200 || ! is_array($body) || ! isset($body['messages'][0]['messageId']) || ! is_string($body['messages'][0]['messageId'])) {
-            throw new RuntimeException("Failed to send SMS via Infobip (HTTP {$statusCode}){$this->errorDetail($body)}.");
-        }
-    }
-
-    /**
-     * Bounded provider error text; supports both the current and the legacy Infobip error models.
-     */
-    private function errorDetail(mixed $body): string
-    {
-        if (! is_array($body)) {
-            return '';
-        }
-
-        $text = $body['description'] ?? $body['requestError']['serviceException']['text'] ?? null;
-
-        return is_string($text) && $text !== '' ? ': '.Str::limit($text, 200) : '';
+                    return new SentMessage(
+                        $to,
+                        is_string($item['messageId'] ?? null) ? $item['messageId'] : null,
+                        is_string(data_get($item, 'status.name')) ? data_get($item, 'status.name') : null,
+                    );
+                }, $message->getTo(), array_keys($message->getTo())));
+            },
+        );
     }
 }

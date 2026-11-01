@@ -10,11 +10,12 @@ return [
     |--------------------------------------------------------------------------
     |
     | The driver used when no provider is selected explicitly. Use "random"
-    | to pick one of the "random_drivers" for each message.
+    | to pick one of the "random_drivers" for each message, or "failover" to
+    | try the "failover.drivers" in order.
     |
     */
 
-    'default' => env('SMS_PROVIDER', 'fake'),
+    'default' => env('SMS_PROVIDER', 'log'),
 
     /*
     |--------------------------------------------------------------------------
@@ -32,6 +33,30 @@ return [
 
     'queue_name' => env('SMS_QUEUE_NAME'),
 
+    // Keep "timeout" above the HTTP timeouts (times the failover chain length), and your
+    // queue connection's "retry_after" above "timeout", or a slow send may be retried twice.
+    'retry' => [
+        'tries' => (int) env('SMS_QUEUE_TRIES', 3),
+        'timeout' => (int) env('SMS_QUEUE_TIMEOUT', 120),
+        'backoff' => [10, 30, 60],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Client
+    |--------------------------------------------------------------------------
+    |
+    | Timeouts (seconds) for provider API calls, and how many per-recipient
+    | requests run concurrently for providers without a bulk endpoint.
+    |
+    */
+
+    'http' => [
+        'timeout' => (int) env('SMS_HTTP_TIMEOUT', 30),
+        'connect_timeout' => (int) env('SMS_HTTP_CONNECT_TIMEOUT', 10),
+        'concurrency' => (int) env('SMS_HTTP_CONCURRENCY', 10),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Driver Registry (Extensible)
@@ -39,23 +64,33 @@ return [
     */
 
     'drivers' => [
+        // Global
         'twilio' => Drivers\TwilioDriver::class,
-        'sparrow' => Drivers\SparrowDriver::class,
-        'msg91' => Drivers\Msg91Driver::class,
         'vonage' => Drivers\VonageDriver::class,
-        'whatsapp' => Drivers\WhatsAppDriver::class,
-        'aws_sns' => Drivers\AwsSnsDriver::class,
-        'telnyx' => Drivers\TelnyxDriver::class,
+        'sinch' => Drivers\SinchDriver::class,
+        'bird' => Drivers\BirdDriver::class,
         'plivo' => Drivers\PlivoDriver::class,
+        'telnyx' => Drivers\TelnyxDriver::class,
         'infobip' => Drivers\InfobipDriver::class,
-        'sendchamp' => Drivers\SendchampDriver::class,
+        'clicksend' => Drivers\ClickSendDriver::class,
+        'clickatell' => Drivers\ClickatellDriver::class,
+        'brevo' => Drivers\BrevoDriver::class,
+        'bandwidth' => Drivers\BandwidthDriver::class,
+        'sendpulse' => Drivers\SendPulseDriver::class,
+        'aws_sns' => Drivers\AwsSnsDriver::class,
+        'whatsapp' => Drivers\WhatsAppDriver::class,
+
+        // Regional
+        'msg91' => Drivers\Msg91Driver::class,
+        'sparrow' => Drivers\SparrowDriver::class,
         'termii' => Drivers\TermiiDriver::class,
+        'sendchamp' => Drivers\SendchampDriver::class,
         'africastalking' => Drivers\AfricasTalkingDriver::class,
         'bulksms' => Drivers\BulkSmsDriver::class,
+
+        // Utility
+        'failover' => Drivers\FailoverDriver::class,
         'log' => Drivers\LogDriver::class,
-        'telegram_mirror' => Drivers\TelegramMirrorDriver::class,
-        'discord_webhook' => Drivers\DiscordWebhookDriver::class,
-        'slack_webhook' => Drivers\SlackWebhookDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
 
@@ -73,6 +108,7 @@ return [
             'sid' => env('TWILIO_SID'),
             'token' => env('TWILIO_TOKEN'),
             'from' => env('TWILIO_FROM'),
+            'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
         ],
 
         'sparrow' => [
@@ -101,6 +137,7 @@ return [
             'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', ''),
         ],
 
+        // Requires aws/aws-sdk-php. Leave key/secret empty to use the default AWS credential chain (IAM roles).
         'aws_sns' => [
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
@@ -158,18 +195,54 @@ return [
             'channel' => env('SMS_LOG_CHANNEL'),
         ],
 
-        // Mirror drivers send a redacted copy to an internal channel; they never reach the recipient.
-        'telegram_mirror' => [
-            'bot_token' => env('TELEGRAM_BOT_TOKEN'),
-            'chat_id' => env('TELEGRAM_CHAT_ID'),
+        'sinch' => [
+            'service_plan_id' => env('SINCH_SERVICE_PLAN_ID'),
+            'api_token' => env('SINCH_API_TOKEN'),
+            'from' => env('SINCH_FROM'),
+            'region' => env('SINCH_REGION', 'us'), // us, eu, au, br, ca
         ],
 
-        'discord_webhook' => [
-            'webhook_url' => env('DISCORD_WEBHOOK_URL'),
+        'bird' => [
+            'api_key' => env('BIRD_API_KEY'),
+            'from' => env('BIRD_FROM'),
+            'region' => env('BIRD_REGION', 'us1'), // us1, eu1
+            'category' => env('BIRD_CATEGORY', 'transactional'), // transactional, marketing, authentication, service
         ],
 
-        'slack_webhook' => [
-            'webhook_url' => env('SLACK_WEBHOOK_URL'),
+        'clicksend' => [
+            'username' => env('CLICKSEND_USERNAME'),
+            'api_key' => env('CLICKSEND_API_KEY'),
+            'from' => env('CLICKSEND_FROM'),
+        ],
+
+        'clickatell' => [
+            'api_key' => env('CLICKATELL_API_KEY'),
+            'from' => env('CLICKATELL_FROM'),
+        ],
+
+        'brevo' => [
+            'api_key' => env('BREVO_API_KEY'),
+            'sender' => env('BREVO_SMS_SENDER'),
+            'type' => env('BREVO_SMS_TYPE', 'transactional'), // transactional, marketing
+        ],
+
+        'bandwidth' => [
+            'account_id' => env('BANDWIDTH_ACCOUNT_ID'),
+            'application_id' => env('BANDWIDTH_APPLICATION_ID'),
+            'client_id' => env('BANDWIDTH_CLIENT_ID'),
+            'client_secret' => env('BANDWIDTH_CLIENT_SECRET'),
+            'from' => env('BANDWIDTH_FROM'),
+        ],
+
+        'sendpulse' => [
+            'client_id' => env('SENDPULSE_CLIENT_ID'),
+            'client_secret' => env('SENDPULSE_CLIENT_SECRET'),
+            'sender' => env('SENDPULSE_SENDER'),
+        ],
+
+        // Tries each provider in order; recipients that already succeeded are never resent.
+        'failover' => [
+            'drivers' => array_values(array_filter(array_map('trim', explode(',', (string) env('SMS_FAILOVER_DRIVERS', 'twilio,vonage'))))),
         ],
 
         'fake' => [],
