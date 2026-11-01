@@ -19,6 +19,13 @@ return [
         'vonage' => Drivers\VonageDriver::class,
         'whatsapp' => Drivers\WhatsAppDriver::class,
         'aws_sns' => Drivers\AwsSnsDriver::class,
+        'telnyx' => Drivers\TelnyxDriver::class,
+        'plivo' => Drivers\PlivoDriver::class,
+        'infobip' => Drivers\InfobipDriver::class,
+        'log' => Drivers\LogDriver::class,
+        'telegram_mirror' => Drivers\TelegramMirrorDriver::class,
+        'discord_webhook' => Drivers\DiscordWebhookDriver::class,
+        'slack_webhook' => Drivers\SlackWebhookDriver::class,
         'fake' => Drivers\FakeDriver::class,
     ],
 
@@ -68,6 +75,40 @@ return [
             'sms_type' => env('AWS_SNS_SMS_TYPE', 'Transactional'), // Transactional or Promotional
         ],
 
+        'telnyx' => [
+            'api_key' => env('TELNYX_API_KEY'),
+            'from' => env('TELNYX_FROM'),
+            'messaging_profile_id' => env('TELNYX_MESSAGING_PROFILE_ID'),
+        ],
+
+        'plivo' => [
+            'auth_id' => env('PLIVO_AUTH_ID'),
+            'auth_token' => env('PLIVO_AUTH_TOKEN'),
+            'from' => env('PLIVO_FROM'),
+            'log' => env('PLIVO_LOG_MESSAGES', false),
+        ],
+
+        'infobip' => [
+            'api_key' => env('INFOBIP_API_KEY'),
+            'sender' => env('INFOBIP_SENDER'),
+            'base_url' => env('INFOBIP_BASE_URL', 'https://api.infobip.com/'),
+        ],
+
+        'log' => [],
+
+        'telegram_mirror' => [
+            'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+            'chat_id' => env('TELEGRAM_CHAT_ID'),
+        ],
+
+        'discord_webhook' => [
+            'webhook_url' => env('DISCORD_WEBHOOK_URL'),
+        ],
+
+        'slack_webhook' => [
+            'webhook_url' => env('SLACK_WEBHOOK_URL'),
+        ],
+
         'fake' => [],
     ],
 
@@ -92,7 +133,8 @@ return [
         |--------------------------------------------------------------------------
         |
         | Configure webhook secrets for each provider to verify incoming
-        | webhook requests. Leave empty to disable verification.
+        | webhook requests. A configured webhook rejects requests when its
+        | secret is empty or invalid.
         |
         */
         'twilio' => [

@@ -29,6 +29,8 @@ Only the **latest major release** of this package is actively supported with sec
 
 Keep Laravel, PHP, and dependencies up to date.
 
+Laravel 11 compatibility is provided for existing applications, but Laravel 11 is outside its upstream security-support window. Use the latest Laravel 12 or Laravel 13 release for security-supported deployments.
+
 ## Disclosure process
 
 1. You report the vulnerability privately
@@ -44,7 +46,7 @@ Please allow reasonable time before public disclosure.
 When using this package in production:
 
 - Store provider credentials in environment variables or a secrets manager, not in source control
-- Restrict webhook routes (HTTPS, IP allowlists or signature verification where your driver supports it)
+- Restrict webhook routes (HTTPS and IP allowlists where appropriate). WhatsApp webhook requests require a valid `X-Hub-Signature-256` signature and a configured `WHATSAPP_WEBHOOK_SECRET`.
 - Limit who can trigger SMS sends in your app (rate limits, auth, auditing)
 - Review logs so message bodies and phone numbers are not exposed unnecessarily
 - Keep `guzzlehttp/guzzle`, `aws/aws-sdk-php`, and Laravel patched

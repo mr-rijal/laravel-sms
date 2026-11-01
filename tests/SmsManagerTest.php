@@ -142,6 +142,20 @@ class SmsManagerTest extends TestCase
         Sms::provider('fake')->message('No to')->sendNow();
     }
 
+    public function test_failed_validation_does_not_leak_message_state_into_the_next_send(): void
+    {
+        try {
+            Sms::provider('fake')->message('Invalid message')->sendNow();
+            $this->fail('Expected validation to fail without a recipient.');
+        } catch (\InvalidArgumentException) {
+            // The next facade call must start with a fresh message.
+        }
+
+        Sms::provider('fake')->to('9800000000')->message('Valid message')->sendNow();
+
+        $this->assertSame(['9800000000'], FakeDriver::$messages[0]['to']);
+    }
+
     public function test_send_throws_when_no_message_or_template(): void
     {
         $this->expectException(\InvalidArgumentException::class);
