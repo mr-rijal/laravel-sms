@@ -65,6 +65,9 @@ abstract class HttpDriver extends Driver
     /**
      * Send one request per recipient, concurrently, collecting partial success.
      *
+     * Any failure is reported as a DeliveryException whose failedRecipients are exactly the
+     * recipients the provider did not accept, so retries and failover never double-send.
+     *
      * @param  Closure(PendingRequest, string): mixed  $send  returns the response (or promise inside a pool)
      * @param  Closure(Response, string): SentMessage  $parse  throws DeliveryException on rejection
      */
@@ -73,9 +76,27 @@ abstract class HttpDriver extends Driver
         $sent = [];
         $failed = [];
         $firstError = null;
+        $stopped = false;
 
         foreach (array_chunk($message->getTo(), max(1, self::intConfig('sms.http.concurrency', 10))) as $chunk) {
-            foreach ($this->dispatch($chunk, $send) as $to => $response) {
+            if ($stopped) {
+                // An unrecoverable error (e.g. authentication) stopped the batch: these were never sent.
+                array_push($failed, ...$chunk);
+
+                continue;
+            }
+
+            try {
+                $responses = $this->dispatch($chunk, $send);
+            } catch (Throwable $e) {
+                array_push($failed, ...$chunk);
+                $firstError ??= $this->unexpectedError($e, $chunk);
+                $stopped = true;
+
+                continue;
+            }
+
+            foreach ($responses as [$to, $response]) {
                 try {
                     if ($response instanceof Throwable) {
                         throw $response;
@@ -88,20 +109,21 @@ abstract class HttpDriver extends Driver
                 } catch (ConnectionException $e) {
                     $failed[] = $to;
                     $firstError ??= $this->transportError([$to], $e);
+                } catch (Throwable $e) {
+                    $failed[] = $to;
+                    $firstError ??= $this->unexpectedError($e, [$to]);
                 }
             }
         }
 
         if ($firstError !== null) {
-            $partial = new SmsResult($sent, $this->label);
-
             throw new DeliveryException(
                 count($failed) === count($message->getTo())
                     ? $firstError->getMessage()
                     : $firstError->getMessage().' ('.count($failed).' of '.count($message->getTo()).' recipients failed)',
                 $this->label,
                 $failed,
-                $partial,
+                new SmsResult($sent, $this->label),
                 $firstError->getCode(),
                 $firstError,
             );
@@ -111,9 +133,21 @@ abstract class HttpDriver extends Driver
     }
 
     /**
+     * Errors raised outside a provider response (token refresh, stray requests, bugs).
+     *
+     * @param  list<string>  $recipients
+     */
+    private function unexpectedError(Throwable $e, array $recipients): DeliveryException
+    {
+        return $e instanceof DeliveryException
+            ? $e
+            : new DeliveryException("Failed to send SMS via {$this->label} (unexpected error).", $this->label, $recipients, null, 0, $e);
+    }
+
+    /**
      * @param  list<string>  $recipients
      * @param  Closure(PendingRequest, string): mixed  $send
-     * @return array<string, Response|Throwable>
+     * @return list<array{string, Response|Throwable}>
      */
     private function dispatch(array $recipients, Closure $send): array
     {
@@ -121,19 +155,23 @@ abstract class HttpDriver extends Driver
             try {
                 $response = $send($this->request(), $recipients[0]);
 
-                return [$recipients[0] => $response instanceof Response ? $response : new ConnectionException('Unexpected response.')];
+                return [[$recipients[0], $response instanceof Response ? $response : new ConnectionException('Unexpected response.')]];
             } catch (ConnectionException $e) {
-                return [$recipients[0] => $e];
+                return [[$recipients[0], $e]];
             }
         }
 
-        /** @var array<string, Response|Throwable> $responses */
+        // Pool keys must not be numeric strings: PHP would turn phone numbers into int keys.
         $responses = Http::pool(fn (Pool $pool): array => array_map(
-            fn (string $to): mixed => $send($this->configure($pool->as($to)), $to),
-            $recipients,
+            fn (int $i): mixed => $send($this->configure($pool->as("r{$i}")), $recipients[$i]),
+            array_keys($recipients),
         ));
 
-        return $responses;
+        return array_map(function (int $i) use ($recipients, $responses): array {
+            $response = $responses["r{$i}"] ?? null;
+
+            return [$recipients[$i], $response instanceof Response || $response instanceof Throwable ? $response : new ConnectionException('No response.')];
+        }, array_keys($recipients));
     }
 
     /**
@@ -212,9 +250,18 @@ abstract class HttpDriver extends Driver
         }
 
         $expiresIn = $response->json('expires_in');
-        Cache::put($key, $token, max(60, (is_numeric($expiresIn) ? (int) $expiresIn : 3600) - 60));
+        $lifetime = is_numeric($expiresIn) ? (int) $expiresIn : 3600;
+        Cache::put($key, $token, max(1, $lifetime > 120 ? $lifetime - 60 : intdiv($lifetime, 2)));
 
         return $token;
+    }
+
+    /**
+     * Drop a cached token (e.g. after the provider answers 401), so the next send re-authenticates.
+     */
+    protected function forgetToken(string $clientId): void
+    {
+        Cache::forget('laravel-sms:token:'.hash('sha256', static::class.'|'.$clientId));
     }
 
     private static function intConfig(string $key, int $default): int

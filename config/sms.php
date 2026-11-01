@@ -33,8 +33,11 @@ return [
 
     'queue_name' => env('SMS_QUEUE_NAME'),
 
+    // Keep "timeout" above the HTTP timeouts (times the failover chain length), and your
+    // queue connection's "retry_after" above "timeout", or a slow send may be retried twice.
     'retry' => [
         'tries' => (int) env('SMS_QUEUE_TRIES', 3),
+        'timeout' => (int) env('SMS_QUEUE_TIMEOUT', 120),
         'backoff' => [10, 30, 60],
     ],
 

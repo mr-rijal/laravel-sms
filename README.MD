@@ -22,7 +22,7 @@ $result->firstId(); // the provider's message ID
 - **Reliable:** every send returns an `SmsResult` with message IDs. Partial failures say exactly which recipients failed, and `failover` retries only those recipients on the next provider.
 - **Secure:** webhooks fail closed with signature checks, queued jobs are encrypted, and secrets never appear in exception messages or cache keys.
 - **Testable:** `Sms::fake()` with `assertSent()`, `assertSentTo()` and `assertQueued()`, and every driver works with `Http::fake()`.
-- **Laravel-native:** scoped manager (Octane and queue safe), notification channel, events, macros, `Sms::extend()`, `php artisan sms:test`, and `php artisan about` integration.
+- **Laravel-native:** Octane- and queue-safe (each send builds a fresh message), notification channel, events, macros, `Sms::extend()`, `php artisan sms:test`, and `php artisan about` integration.
 - **Typed:** PHPStan at max level.
 
 ## Requirements
@@ -155,6 +155,7 @@ Set `SMS_QUEUE=true` to make `send()` queue by default. Queued messages are spli
 SMS_QUEUE_CONNECTION=redis
 SMS_QUEUE_NAME=sms
 SMS_QUEUE_TRIES=3
+SMS_QUEUE_TIMEOUT=120   # keep your queue's retry_after above this
 ```
 
 ### Failover and load balancing

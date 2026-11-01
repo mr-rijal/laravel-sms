@@ -28,6 +28,8 @@ See [UPGRADE.md](UPGRADE.md) for the breaking changes.
 - All drivers use Laravel's HTTP client (fakeable with `Http::fake()`) instead of Guzzle directly.
 - Bulk-capable providers (Sparrow, BulkSMS, and others) send one request for all recipients.
 - `aws/aws-sdk-php` is now optional (`suggest`).
+- The manager is a singleton again (per-message state lives in `PendingSms`), so `Sms::extend()` drivers survive Octane requests and queue jobs.
+- Queued job timeout is configurable (`SMS_QUEUE_TIMEOUT`, default 120s) and longer than one HTTP attempt.
 - Phone numbers are normalized (spaces, dashes, dots, parentheses removed); length limit counts characters, not bytes.
 - Successful sends are no longer logged at info level; use the `SmsSent` event.
 - PHPStan runs at max level.

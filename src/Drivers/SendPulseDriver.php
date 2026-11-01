@@ -36,6 +36,10 @@ class SendPulseDriver extends HttpDriver
                     'body' => $text,
                 ]),
             function (Response $response) use ($message): SmsResult {
+                if ($response->status() === 401) {
+                    $this->forgetToken($this->value('client_id'));
+                }
+
                 if (! $response->successful() || $response->json('result') !== true) {
                     $this->fail($response, ['message', 'error']);
                 }

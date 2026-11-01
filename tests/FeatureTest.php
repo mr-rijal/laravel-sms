@@ -7,9 +7,11 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification as BaseNotification;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use MrRijal\LaravelSms\Drivers\FakeDriver;
+use MrRijal\LaravelSms\Events\SmsSent;
 use MrRijal\LaravelSms\Exceptions\DeliveryException;
 use MrRijal\LaravelSms\Facades\Sms;
 use MrRijal\LaravelSms\Jobs\SendSmsJob;
@@ -41,6 +43,31 @@ class FeatureTest extends TestCase
         Sms::assertQueued(fn (SmsMessage $m): bool => $m->getTo() === ['9800000000']);
         Sms::assertNotSent(fn (SmsMessage $m): bool => $m->getText() === 'Nope');
         $this->assertCount(1, $fake->sent());
+        $this->assertSame([], FakeDriver::$messages);
+    }
+
+    public function test_sms_fake_behaves_like_a_real_send(): void
+    {
+        Event::fake([SmsSent::class]);
+        config(['sms.random_drivers' => ['fake']]);
+        Sms::fake();
+
+        $this->assertSame('fake', Sms::provider('random')->to('9812345678')->message('Hi')->sendNow()?->provider);
+        Event::assertDispatched(SmsSent::class);
+
+        $this->expectExceptionMessage('SMS driver [typo] not configured.');
+        Sms::provider('typo')->to('9812345678')->message('Hi')->sendNow();
+    }
+
+    public function test_sms_fake_is_used_by_the_notification_channel_and_jobs(): void
+    {
+        Sms::fake();
+        $this->app->forgetScopedInstances();
+
+        (new SmsUser('9812345678'))->notify(new SmsNotification(message: 'Via channel'));
+        dispatch_sync(new SendSmsJob(SmsMessage::create('Via job')->to('9812345678')));
+
+        Sms::assertSentCount(2);
         $this->assertSame([], FakeDriver::$messages);
     }
 

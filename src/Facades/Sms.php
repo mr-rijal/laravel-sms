@@ -38,11 +38,6 @@ use MrRijal\LaravelSms\Testing\SmsFake;
 class Sms extends Facade
 {
     /**
-     * Never cache the resolved instance: the manager binding is scoped.
-     */
-    protected static $cached = false;
-
-    /**
      * Replace the SMS manager with a fake that records messages instead of sending them.
      */
     public static function fake(): SmsFake

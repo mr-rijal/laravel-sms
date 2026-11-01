@@ -41,6 +41,10 @@ class BandwidthDriver extends HttpDriver
                     'text' => $text,
                 ]),
             function (Response $response, string $to): SentMessage {
+                if ($response->status() === 401) {
+                    $this->forgetToken($this->value('client_id'));
+                }
+
                 if ($response->status() !== 202) {
                     $this->fail($response, ['description', 'message']);
                 }

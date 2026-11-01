@@ -25,7 +25,7 @@ class SendSmsJob implements ShouldBeEncrypted, ShouldQueue
 
     public int $tries;
 
-    public int $timeout = 30;
+    public int $timeout;
 
     /**
      * @var list<int>
@@ -39,6 +39,9 @@ class SendSmsJob implements ShouldBeEncrypted, ShouldQueue
         if ($provider !== null) {
             $this->message->provider($provider);
         }
+
+        $timeout = config('sms.retry.timeout', 120);
+        $this->timeout = is_numeric($timeout) ? max(1, (int) $timeout) : 120;
 
         $tries = config('sms.retry.tries', 3);
         $this->tries = is_numeric($tries) ? max(1, (int) $tries) : 3;

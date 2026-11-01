@@ -8,6 +8,9 @@ use Closure;
 use DateInterval;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
+use MrRijal\LaravelSms\Events\SmsSending;
+use MrRijal\LaravelSms\Events\SmsSent;
+use MrRijal\LaravelSms\Exceptions\InvalidConfigurationException;
 use MrRijal\LaravelSms\SmsManager;
 use MrRijal\LaravelSms\SmsMessage;
 use MrRijal\LaravelSms\SmsResult;
@@ -28,14 +31,31 @@ class SmsFake extends SmsManager
      */
     protected array $queued = [];
 
+    /**
+     * Behaves like a real send (validation, provider resolution, SmsSending / SmsSent events)
+     * but records the message instead of calling a provider.
+     */
     public function sendNow(SmsMessage $message): ?SmsResult
     {
         $message->validate();
 
+        $provider = $this->resolveProviderName($message->getProvider());
+
+        if (! isset($this->customCreators[$provider]) && config("sms.drivers.{$provider}") === null) {
+            throw new InvalidConfigurationException("SMS driver [{$provider}] not configured.");
+        }
+
+        if ($this->events()->until(new SmsSending($message, $provider)) === false) {
+            return null;
+        }
+
         $this->sent[] = $message;
 
-        return SmsResult::accepted($message->getTo(), 'fake-'.count($this->sent), 'accepted')
-            ->withProvider($message->getProvider() ?? $this->getDefaultDriver());
+        $result = SmsResult::accepted($message->getTo(), 'fake-'.count($this->sent), 'accepted')->withProvider($provider);
+
+        $this->events()->dispatch(new SmsSent($message, $provider, $result));
+
+        return $result;
     }
 
     public function queue(SmsMessage $message, DateTimeInterface|DateInterval|int|null $delay = null): void

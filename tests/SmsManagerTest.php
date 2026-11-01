@@ -180,14 +180,15 @@ class SmsManagerTest extends TestCase
         $this->assertNotSame($first, $manager->forgetDrivers()->driver('fake'));
     }
 
-    public function test_manager_is_scoped_and_bound_to_the_contract(): void
+    public function test_custom_drivers_survive_queue_and_octane_scope_resets(): void
     {
+        Sms::extend('acme', fn () => new FakeDriver);
+
         $this->assertSame($this->app->make(SmsManager::class), $this->app->make(Factory::class));
 
-        $first = $this->app->make(SmsManager::class);
         $this->app->forgetScopedInstances();
 
-        $this->assertNotSame($first, $this->app->make(SmsManager::class));
+        $this->assertInstanceOf(FakeDriver::class, Sms::driver('acme'));
     }
 
     public function test_macros_receive_the_manager(): void

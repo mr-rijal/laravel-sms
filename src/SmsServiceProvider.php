@@ -18,8 +18,9 @@ class SmsServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sms.php', 'sms');
 
-        // Scoped, so Octane requests and queue jobs each get a fresh manager and driver cache.
-        $this->app->scoped('laravel-sms', fn (Application $app): SmsManager => new SmsManager($app));
+        // A singleton, so drivers registered with Sms::extend() survive Octane requests and queue jobs.
+        // Per-message state lives in PendingSms, never on the manager.
+        $this->app->singleton('laravel-sms', fn (Application $app): SmsManager => new SmsManager($app));
         $this->app->alias('laravel-sms', SmsManager::class);
         $this->app->alias('laravel-sms', Factory::class);
 

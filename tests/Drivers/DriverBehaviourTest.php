@@ -8,6 +8,7 @@ use Aws\Result;
 use Aws\Sns\SnsClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use MrRijal\LaravelSms\Drivers;
@@ -237,5 +238,67 @@ class DriverBehaviourTest extends TestCase
         $this->assertSame('ACME', Drivers\FakeDriver::$messages[0]['from']);
         Drivers\FakeDriver::reset();
         $this->assertSame([], Drivers\FakeDriver::$messages);
+    }
+
+    public function test_numbers_without_a_plus_work_for_per_recipient_drivers(): void
+    {
+        Http::fake(['api.twilio.com/*' => Http::response(['sid' => 'SM1'], 201)]);
+        $driver = new Drivers\TwilioDriver(self::TWILIO);
+
+        $this->assertSame(['9779812345678'], $driver->send((new SmsMessage)->to('9779812345678')->message('Hi'))->recipients());
+        $this->assertSame(
+            ['9779812345678', '9779800000000'],
+            $driver->send((new SmsMessage)->to(['9779812345678', '9779800000000'])->message('Hi'))->recipients(),
+        );
+    }
+
+    public function test_a_mid_batch_auth_failure_reports_only_unsent_recipients(): void
+    {
+        config(['sms.http.concurrency' => 1]);
+        $tokenCalls = 0;
+        Http::fake([
+            'api.bandwidth.com/*' => function () use (&$tokenCalls) {
+                return ++$tokenCalls === 1
+                    ? Http::response(['access_token' => 'T', 'expires_in' => 3600])
+                    : Http::response(['error' => 'invalid_client'], 401);
+            },
+            'messaging.bandwidth.com/*' => function () {
+                Cache::flush(); // token expires after the first send
+
+                return Http::response(['id' => 'bw1'], 202);
+            },
+        ]);
+
+        try {
+            (new Drivers\BandwidthDriver([
+                'account_id' => '1', 'application_id' => 'a', 'client_id' => 'c', 'client_secret' => 's', 'from' => '+15550000000',
+            ]))->send((new SmsMessage)->to(['+15551230001', '+15551230002', '+15551230003'])->message('Hi'));
+            $this->fail('Expected DeliveryException.');
+        } catch (DeliveryException $e) {
+            $this->assertSame(['+15551230001'], $e->partial?->recipients());
+            $this->assertSame(['+15551230002', '+15551230003'], $e->failedRecipients);
+            $this->assertStringContainsString('Failed to authenticate with Bandwidth', $e->getMessage());
+        }
+    }
+
+    public function test_a_401_drops_the_cached_oauth_token(): void
+    {
+        Http::fake([
+            'api.sendpulse.com/oauth/access_token' => Http::sequence()
+                ->push(['access_token' => 'OLD', 'expires_in' => 3600])
+                ->push(['access_token' => 'NEW', 'expires_in' => 3600]),
+            'api.sendpulse.com/sms/send' => Http::sequence()
+                ->push(['message' => 'Token revoked'], 401)
+                ->push(['result' => true, 'campaign_id' => 7]),
+        ]);
+        $driver = new Drivers\SendPulseDriver(['client_id' => 'cid', 'client_secret' => 'cs', 'sender' => 'Acme']);
+
+        try {
+            $driver->send((new SmsMessage)->to('+15551230001')->message('Hi'));
+        } catch (DeliveryException) {
+        }
+
+        $this->assertSame('7', $driver->send((new SmsMessage)->to('+15551230001')->message('Hi'))->firstId());
+        Http::assertSent(fn (Request $r): bool => str_contains($r->url(), 'sms/send') && $r->hasHeader('Authorization', 'Bearer NEW'));
     }
 }
